@@ -162,20 +162,21 @@
         </nav>
         <!-- Sidebar Footer -->
         <div class="sidebar-footer">
+          <!-- Logout Button positioned above other footer content -->
+          <button class="logout-button" @click="logout">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 22H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h5"></path>
+              <polyline points="17 16 21 12 17 8"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span v-if="isExpanded">Logout</span>
+          </button>
+          <!-- Other footer content below logout button -->
           <div class="sidebar-footer-content" v-if="isExpanded">
             <div class="sidebar-version">v1.0.0</div>
             <div class="sidebar-help">
               <a href="#" @click.prevent="setActiveItem('help')">Help & Support</a>
             </div>
-            <!-- Logout Button -->
-            <button class="logout-button" @click="logout">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 22H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h5"></path>
-                <polyline points="17 16 21 12 17 8"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
-              </svg>
-              <span v-if="isExpanded">Logout</span>
-            </button>
           </div>
         </div>
       </div>
@@ -298,6 +299,17 @@
               </li>
               <li @click="setActiveItem('help')">
                 <span>Help & Support</span>
+              </li>
+              <!-- Logout option in More menu -->
+              <li @click="logout" class="logout-option">
+                <span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 22H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h5"></path>
+                    <polyline points="17 16 21 12 17 8"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                  Logout
+                </span>
               </li>
             </template>
           </ul>
@@ -549,7 +561,7 @@ export default {
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 .sidebar-nav {
   flex: 1;
@@ -568,13 +580,13 @@ export default {
 .sidebar-menu-link {
   display: flex;
   align-items: center;
-  padding: 8px 15px;
+  padding: 10px 15px;
   color: #2c3e50;
   text-decoration: none;
   transition: all 0.2s ease;
   border-radius: 4px;
   margin: 0 5px;
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 .sidebar-menu-link:hover {
   background-color: #f0f8f0;
@@ -590,9 +602,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 25px;
-  height: 25px;
-  margin-right: 10px;
+  width: 28px;
+  height: 28px;
+  margin-right: 12px;
   color: inherit;
 }
 .sidebar-text {
@@ -600,13 +612,13 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 .sidebar-arrow {
   margin-left: 5px;
   transition: transform 0.2s ease;
   color: #777;
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 .arrow-down {
   transform: rotate(90deg);
@@ -622,12 +634,12 @@ export default {
 }
 .sidebar-submenu-link {
   display: block;
-  padding: 6px 10px;
+  padding: 8px 10px;
   color: #2c3e50;
   text-decoration: none;
   transition: all 0.2s ease;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.9rem;
 }
 .sidebar-submenu-link:hover {
   color: #4caf50;
@@ -640,20 +652,24 @@ export default {
   background-color: rgba(76, 175, 80, 0.1);
 }
 .sidebar-footer {
-  padding: 10px;
+  padding: 15px;
   border-top: 1px solid #eee;
-  font-size: 0.7rem;
+  font-size: 0.9rem;
   color: #666;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
 .sidebar-footer-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: 10px;
 }
 .sidebar-help a {
   color: #4caf50;
   text-decoration: none;
-  font-size: 0.7rem;
+  font-size: 0.9rem;
 }
 .sidebar-help a:hover {
   text-decoration: underline;
@@ -661,19 +677,26 @@ export default {
 .logout-button {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: none;
-  border: none;
-  color: #666;
+  justify-content: center;
+  gap: 10px;
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  color: #333;
   cursor: pointer;
-  font-size: 0.7rem;
+  font-size: 0.95rem;
+  padding: 8px 12px;
+  width: 100%;
+  transition: all 0.2s ease;
 }
 .logout-button:hover {
+  background-color: #e8f5e9;
   color: #4caf50;
+  border-color: #4caf50;
 }
 .logout-button svg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Mobile Footer Navigation Styles */
@@ -682,7 +705,7 @@ export default {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 60px;
+  height: 65px;
   background-color: white;
   display: flex;
   justify-content: space-around;
@@ -700,18 +723,19 @@ export default {
   color: #2c3e50;
   padding: 5px 0;
   transition: background-color 0.2s ease;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
 }
 .mobile-nav-item.active {
   color: #4caf50;
-}.mobile-nav-icon {
+}
+.mobile-nav-icon {
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 4px;
 }
 .mobile-nav-text {
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   text-align: center;
 }
 
@@ -748,7 +772,7 @@ export default {
 .mobile-submenu-header h3 {
   margin: 0;
   color: #2c3e50;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
 }
 .mobile-submenu-close {
   background: none;
@@ -771,6 +795,7 @@ export default {
   border-bottom: 1px solid #f5f5f5;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 1.1rem;
 }
 .mobile-submenu-list li:hover {
   background-color: #f0f8f0;
@@ -778,13 +803,19 @@ export default {
 }
 .mobile-submenu-list li span {
   color: #2c3e50;
-  font-size: 1rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logout-option span {
+  color: #e53935;
 }
 
 /* Adjust main content padding for mobile footer */
 @media (max-width: 1023px) {
   .main-content {
-    padding-bottom: 70px; /* Add padding to account for mobile footer */
+    padding-bottom: 75px; /* Add padding to account for mobile footer */
   }
 }
 </style>

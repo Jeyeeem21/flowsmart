@@ -354,7 +354,7 @@ methods: {
   },
   
   navigateToRegister() {
-    this.router.push('/resident/register');
+    this.router.push('/resident/register1');
   }
 },
 mounted() {

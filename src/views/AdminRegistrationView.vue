@@ -193,9 +193,8 @@
 
 <script>
 import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
-
 export default {
   name: 'AdminRegistration',
   setup() {
@@ -244,28 +243,38 @@ export default {
     },
     
     async signInWithGoogle() {
-      this.isLoading = true;
-      this.error = null;
-      
-      try {
-        const auth = getAuth();
-        const provider = new GoogleAuthProvider();
-        const { user } = await signInWithPopup(auth, provider);
-        
-        // Pre-fill form with data from Google account
-        this.form.email = user.email || '';
-        this.form.fullName = user.displayName || '';
-        
-        // Store user reference and move to next step
-        this.authUser = user;
-        this.currentStep = 2;
-      } catch (error) {
-        console.error('Google sign-in error:', error);
-        this.error = this.getErrorMessage(error);
-      } finally {
-        this.isLoading = false;
-      }
-    },
+  this.isLoading = true;
+  this.error = null;
+  try {
+    const auth = getAuth();
+    const provider = new GoogleAuthProvider();
+    const { user } = await signInWithPopup(auth, provider);
+
+    // NEW: Check Firestore if email is already used
+    const db = getFirestore();
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('email', '==', user.email));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+      // ❌ Email already exists in Firestore
+      this.isLoading = false;
+      return this.error = 'This email is already registered. Please use a different one or log in.';
+    }
+
+    // ✅ Email is available, proceed
+    this.form.email = user.email || '';
+    this.form.fullName = user.displayName || '';
+    this.authUser = user;
+    this.currentStep = 2;
+
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    this.error = this.getErrorMessage(error);
+  } finally {
+    this.isLoading = false;
+  }
+},
     
     async completeRegistration() {
       this.isLoading = true;

@@ -182,10 +182,7 @@
           {{ error }}
         </div>
         
-        <!-- Login Link -->
-        <div class="auth-footer" v-if="currentStep !== 3">
-          <p>Already have an account? <router-link to="/resident/login">Login</router-link></p>
-        </div>
+        
       </div>
     </div>
   </div>

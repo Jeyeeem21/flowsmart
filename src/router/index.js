@@ -51,6 +51,7 @@ const routes = [
     path: '/resident/register1',
     name: 'registerResidents',
     component: RegisterResidentsView,
+    meta: { requiresAuth: true },
   },
   {
     path: '/resident/register2',
@@ -73,6 +74,7 @@ const routes = [
     path: '/admin/register',
     name: 'adminRegistration',
     component: AdminRegistrationView,
+    meta: { requiresAuth: true },
   },
   {
     path: '/reports/usage',
