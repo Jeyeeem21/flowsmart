@@ -26,7 +26,6 @@
     </div>
   </div>
 </template>
-
 <script>
 import Header from './components/Header.vue';
 import Sidebar from './components/Sidebar.vue';
@@ -39,9 +38,9 @@ export default {
   },
   data() {
     return {
-      isLoggedIn: true, // Set to `true` or `false` based on authentication status
-      isSidebarExpanded: true, // Controls whether the sidebar is expanded or collapsed
-      publicRoutes: ['/login', '/resident/register2'], // List of public routes
+      isLoggedIn: true,
+      isSidebarExpanded: true,
+      publicRouteNames: ['login', 'registerResidents2', 'not-found'], // Route **names** now
     };
   },
   computed: {
@@ -49,7 +48,7 @@ export default {
       return this.$route.path === '/home' || this.$route.path === '/';
     },
     isPublicRoute() {
-      return this.publicRoutes.includes(this.$route.path); // Check if the current route is public
+      return this.publicRouteNames.includes(this.$route.name); // Check route **name**
     },
   },
   methods: {
@@ -59,6 +58,7 @@ export default {
   },
 };
 </script>
+
 
 <style>
 /* Global Styles */

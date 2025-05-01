@@ -36,8 +36,9 @@
                 <span class="sidebar-text" v-if="isExpanded">Dashboard</span>
               </a>
             </li>
-            <!-- Device Management -->
-            <li class="sidebar-menu-item" :class="{ active: isDeviceManagementActive }">
+            
+            <!-- Device Management (Admin Only) -->
+            <li v-if="userRole === 'admin'" class="sidebar-menu-item" :class="{ active: isDeviceManagementActive }">
               <a href="#" class="sidebar-menu-link" @click.prevent="toggleSubmenu('deviceManagement')">
                 <span class="sidebar-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -68,8 +69,9 @@
                 </li>
               </ul>
             </li>
-            <!-- User Management -->
-            <li class="sidebar-menu-item" :class="{ active: isUserManagementActive }">
+            
+            <!-- User Management (Admin Only) -->
+            <li v-if="userRole === 'admin'" class="sidebar-menu-item" :class="{ active: isUserManagementActive }">
               <a href="#" class="sidebar-menu-link" @click.prevent="toggleSubmenu('userManagement')">
                 <span class="sidebar-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -109,6 +111,7 @@
                 </li>
               </ul>
             </li>
+            
             <!-- Reports -->
             <li class="sidebar-menu-item" :class="{ active: isReportsActive }">
               <a href="#" class="sidebar-menu-link" @click.prevent="toggleSubmenu('reports')">
@@ -146,6 +149,7 @@
                 </li>
               </ul>
             </li>
+            
             <!-- Settings -->
             <li class="sidebar-menu-item" :class="{ active: activeItem === 'settings' }">
               <a href="#" class="sidebar-menu-link" @click.prevent="setActiveItem('settings')">
@@ -160,6 +164,7 @@
             </li>
           </ul>
         </nav>
+        
         <!-- Sidebar Footer -->
         <div class="sidebar-footer">
           <!-- Logout Button positioned above other footer content -->
@@ -171,6 +176,7 @@
             </svg>
             <span v-if="isExpanded">Logout</span>
           </button>
+          
           <!-- Other footer content below logout button -->
           <div class="sidebar-footer-content" v-if="isExpanded">
             <div class="sidebar-version">v1.0.0</div>
@@ -181,6 +187,7 @@
         </div>
       </div>
     </div>
+    
     <!-- Mobile Footer Navigation -->
     <div class="mobile-footer-nav" v-if="isMobile">
       <div class="mobile-nav-item" :class="{ active: activeItem === 'dashboard' }" @click="setActiveItem('dashboard')">
@@ -194,7 +201,8 @@
         </span>
         <span class="mobile-nav-text">Dashboard</span>
       </div>
-      <div class="mobile-nav-item" :class="{ active: isDeviceManagementActive }" @click="handleMobileSubmenu('deviceManagement')">
+      
+      <div v-if="userRole === 'admin'" class="mobile-nav-item" :class="{ active: isDeviceManagementActive }" @click="handleMobileSubmenu('deviceManagement')">
         <span class="mobile-nav-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="6" width="20" height="12" rx="2"></rect>
@@ -206,7 +214,8 @@
         </span>
         <span class="mobile-nav-text">Devices</span>
       </div>
-      <div class="mobile-nav-item" :class="{ active: isUserManagementActive }" @click="handleMobileSubmenu('userManagement')">
+      
+      <div v-if="userRole === 'admin'" class="mobile-nav-item" :class="{ active: isUserManagementActive }" @click="handleMobileSubmenu('userManagement')">
         <span class="mobile-nav-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -217,6 +226,7 @@
         </span>
         <span class="mobile-nav-text">Users</span>
       </div>
+      
       <div class="mobile-nav-item" :class="{ active: isReportsActive }" @click="handleMobileSubmenu('reports')">
         <span class="mobile-nav-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -229,6 +239,7 @@
         </span>
         <span class="mobile-nav-text">Reports</span>
       </div>
+      
       <div class="mobile-nav-item" :class="{ active: activeItem === 'more' }" @click="toggleMobileMore">
         <span class="mobile-nav-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -240,6 +251,7 @@
         <span class="mobile-nav-text">More</span>
       </div>
     </div>
+    
     <!-- Mobile Submenu Modal -->
     <div class="mobile-submenu-overlay" v-if="showMobileSubmenu" @click="closeMobileSubmenu">
       <div class="mobile-submenu-container" @click.stop>
@@ -255,7 +267,7 @@
         <div class="mobile-submenu-content">
           <ul class="mobile-submenu-list">
             <!-- Device Management Submenu -->
-            <template v-if="mobileSubmenuType === 'deviceManagement'">
+            <template v-if="mobileSubmenuType === 'deviceManagement' && userRole === 'admin'">
               <li @click="setActiveItem('deviceRegistration')">
                 <span>Device Registration</span>
               </li>
@@ -263,23 +275,23 @@
                 <span>Device List</span>
               </li>
             </template>
+            
             <!-- User Management Submenu -->
-            <template v-if="mobileSubmenuType === 'userManagement'">
+            <template v-if="mobileSubmenuType === 'userManagement' && userRole === 'admin'">
               <li @click="setActiveItem('registerResidents')">
                 <span>Register Residents</span>
               </li>
               <li @click="setActiveItem('residentsData')">
                 <span>Residents Data</span>
               </li>
-              <!-- Admin Data Management Link for Mobile -->
               <li @click="setActiveItem('adminData')">
                 <span>Admin Data</span>
               </li>
-              <!-- Admin Registration Link for Mobile -->
               <li @click="setActiveItem('adminRegistration')">
                 <span>Register Admin</span>
               </li>
             </template>
+            
             <!-- Reports Submenu -->
             <template v-if="mobileSubmenuType === 'reports'">
               <li @click="setActiveItem('usageReports')">
@@ -292,6 +304,7 @@
                 <span>Alerts</span>
               </li>
             </template>
+            
             <!-- More Menu -->
             <template v-if="mobileSubmenuType === 'more'">
               <li @click="setActiveItem('settings')">
@@ -321,6 +334,9 @@
 
 <script>
 import { getAuth, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/firebase/config';
+
 export default {
   name: 'Sidebar',
   data() {
@@ -331,7 +347,8 @@ export default {
       isMobile: false,
       showMobileSubmenu: false,
       mobileSubmenuType: null,
-      mobileSubmenuTitle: ''
+      mobileSubmenuTitle: '',
+      userRole: 'resident' // Default to resident, will be updated in mounted
     };
   },
   computed: {
@@ -348,122 +365,137 @@ export default {
       return this.expandedSubmenu === 'reports' || reportItems.includes(this.activeItem);
     }
   },
- methods: {
-  toggleSidebar() {
-    this.isExpanded = !this.isExpanded;
-    if (!this.isExpanded) {
-      this.expandedSubmenu = null;
+  methods: {
+    toggleSidebar() {
+      this.isExpanded = !this.isExpanded;
+      if (!this.isExpanded) {
+        this.expandedSubmenu = null;
+      }
+      this.$emit('toggle-sidebar', this.isExpanded);
+    },
+    toggleSubmenu(submenu) {
+      if (this.expandedSubmenu === submenu) {
+        this.expandedSubmenu = null;
+      } else {
+        this.expandedSubmenu = submenu;
+      }
+    },
+    setActiveItem(item) {
+      this.activeItem = item;
+      this.$emit('menu-selected', item);
+      switch (item) {
+        case 'dashboard':
+          this.$router.push('/dashboard');
+          break;
+        case 'adminData':
+          this.$router.push('/admin/data');
+          break;
+        case 'adminRegistration':
+          this.$router.push('/admin/register');
+          break;
+        case 'residentsData':
+          this.$router.push('/admin/residents');
+          break;
+        case 'registerResidents':
+          this.$router.push('/resident/register1');
+          break;
+        case 'deviceRegistration':
+          this.$router.push('/device/register');
+          break;
+        case 'deviceList':
+          this.$router.push('/device/list');
+          break;
+        case 'deviceStatus':
+          this.$router.push('/device/status');
+          break;
+        case 'usageReports':
+          this.$router.push('/reports/usage');
+          break;
+        case 'billing':
+          this.$router.push('/reports/billing');
+          break;
+        case 'alerts':
+          this.$router.push('/reports/alerts');
+          break;
+        case 'residentData':
+          this.$router.push('/reports/residents');
+          break;
+        case 'settings':
+          this.$router.push('/settings');
+          break;
+        case 'help':
+          this.$router.push('/help');
+          break;
+      }
+      this.closeMobileSubmenu();
+    },
+    async logout() {
+      try {
+        const auth = getAuth();
+        await signOut(auth);
+        console.log('User logged out successfully');
+        this.$router.push('/login');
+      } catch (error) {
+        console.error('Logout failed:', error);
+        alert('Failed to log out. Please try again.');
+      }
+    },
+    checkMobile() {
+      const wasMobile = this.isMobile;
+      this.isMobile = window.innerWidth < 1024;
+      if (this.isMobile) {
+        this.isExpanded = false;
+      } else if (wasMobile !== this.isMobile && wasMobile) {
+        this.isExpanded = true;
+      }
+      this.$emit('toggle-sidebar', this.isExpanded);
+    },
+    handleMobileSubmenu(type) {
+      this.mobileSubmenuType = type;
+      switch (type) {
+        case 'deviceManagement':
+          this.mobileSubmenuTitle = 'Device Management';
+          break;
+        case 'userManagement':
+          this.mobileSubmenuTitle = 'User Management';
+          break;
+        case 'reports':
+          this.mobileSubmenuTitle = 'Reports';
+          break;
+        case 'more':
+          this.mobileSubmenuTitle = 'More Options';
+          break;
+        default:
+          this.mobileSubmenuTitle = '';
+      }
+      this.showMobileSubmenu = true;
+    },
+    toggleMobileMore() {
+      this.handleMobileSubmenu('more');
+    },
+    closeMobileSubmenu() {
+      this.showMobileSubmenu = false;
+    },
+    async fetchUserRole() {
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            this.userRole = userDoc.data().role || 'resident';
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user role:', error);
+      }
     }
-    this.$emit('toggle-sidebar', this.isExpanded);
   },
-  toggleSubmenu(submenu) {
-    if (this.expandedSubmenu === submenu) {
-      this.expandedSubmenu = null;
-    } else {
-      this.expandedSubmenu = submenu;
-    }
-  },
-  setActiveItem(item) {
-    this.activeItem = item;
-    this.$emit('menu-selected', item);
-    switch (item) {
-      case 'dashboard':
-        this.$router.push('/dashboard');
-        break;
-      case 'adminData':
-        this.$router.push('/admin/data');
-        break;
-      case 'adminRegistration':
-        this.$router.push('/admin/register');
-        break;
-      case 'residentsData':
-        this.$router.push('/admin/residents');
-        break;
-      case 'registerResidents':
-        this.$router.push('/resident/register1');
-        break;
-      case 'deviceRegistration':
-        this.$router.push('/device/register');
-        break;
-      case 'deviceList':
-        this.$router.push('/device/list');
-        break;
-      case 'deviceStatus':
-        this.$router.push('/device/status');
-        break;
-      case 'usageReports':
-        this.$router.push('/reports/usage');
-        break;
-      case 'billing':
-        this.$router.push('/reports/billing');
-        break;
-      case 'alerts':
-        this.$router.push('/reports/alerts');
-        break;
-      case 'residentData':
-        this.$router.push('/reports/residents');
-        break;
-      case 'settings':
-        this.$router.push('/settings');
-        break;
-      case 'help':
-        this.$router.push('/help');
-        break;
-    }
-    this.closeMobileSubmenu();
-  },
-  async logout() {
-    try {
-      const auth = getAuth(); // Get the Firebase Auth instance
-      await signOut(auth); // Sign out the current user
-      console.log('User logged out successfully');
-      this.$router.push('/'); // Redirect to the home page (or login page)
-    } catch (error) {
-      console.error('Logout failed:', error);
-      alert('Failed to log out. Please try again.');
-    }
-  },
-  checkMobile() {
-    const wasMobile = this.isMobile;
-    this.isMobile = window.innerWidth < 1024;
-    if (this.isMobile) {
-      this.isExpanded = false;
-    } else if (wasMobile !== this.isMobile && wasMobile) {
-      this.isExpanded = true;
-    }
-    this.$emit('toggle-sidebar', this.isExpanded);
-  },
-  handleMobileSubmenu(type) {
-    this.mobileSubmenuType = type;
-    switch (type) {
-      case 'deviceManagement':
-        this.mobileSubmenuTitle = 'Device Management';
-        break;
-      case 'userManagement':
-        this.mobileSubmenuTitle = 'User Management';
-        break;
-      case 'reports':
-        this.mobileSubmenuTitle = 'Reports';
-        break;
-      case 'more':
-        this.mobileSubmenuTitle = 'More Options';
-        break;
-      default:
-        this.mobileSubmenuTitle = '';
-    }
-    this.showMobileSubmenu = true;
-  },
-  toggleMobileMore() {
-    this.handleMobileSubmenu('more');
-  },
-  closeMobileSubmenu() {
-    this.showMobileSubmenu = false;
-  }
-},
   mounted() {
     this.checkMobile();
     window.addEventListener('resize', this.checkMobile);
     this.$emit('toggle-sidebar', this.isExpanded);
+    
+    // Set active item based on current route
     const path = this.$router.currentRoute.value.path;
     if (path.includes('/admin/data')) {
       this.activeItem = 'adminData';
@@ -480,12 +512,16 @@ export default {
     } else if (path.includes('/dashboard')) {
       this.activeItem = 'dashboard';
     }
+    
+    // Fetch user role
+    this.fetchUserRole();
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkMobile);
   }
 };
 </script>
+
 
 <style scoped>
 /* Import Poppins Font */

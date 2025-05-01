@@ -5,12 +5,12 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBzLqYxnQmbuA2kF6jGseG6HDSA0reV3tM",
-    authDomain: "fir-3x.firebaseapp.com",
-    projectId: "fir-3x",
-    storageBucket: "fir-3x.firebasestorage.app",
-    messagingSenderId: "666603837344",
-    appId: "1:666603837344:web:02274882dbcae3d14af6c5"
+    apiKey: "AIzaSyDf4_P0mvZ_ai3Ruf7AyPN9qrqwexJGkEk",
+    authDomain: "flowsmart2x.firebaseapp.com",
+    projectId: "flowsmart2x",
+    storageBucket: "flowsmart2x.firebasestorage.app",
+    messagingSenderId: "588707160909",
+    appId: "1:588707160909:web:19c5adf94f6a78c5fb0d04"
 };
 
 const app = initializeApp(firebaseConfig);

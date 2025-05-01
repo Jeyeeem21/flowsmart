@@ -1,10 +1,18 @@
 <template>
   <div class="login-container">
     <div class="login-card">
+    
       <div class="login-header">
         <h1>FlowSmart</h1>
         <p>Water Management System</p>
       </div>
+        <button class="btn-back-home" @click="goToHome">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Back to Home
+      </button>
       
       <div class="login-form">
         <h2>Sign In</h2>
@@ -68,8 +76,9 @@
 <script>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { auth } from '@/firebase/config';
+import { auth, db } from '@/firebase/config';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default {
   name: 'LoginView',
@@ -80,13 +89,43 @@ export default {
     const loading = ref(false);
     const router = useRouter();
     
+    const goToHome = () => {
+      router.push('/');
+    };
+    
+    const redirectBasedOnRole = async (user) => {
+      try {
+        // Check user role in Firestore
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          
+          if (userData.role === 'admin') {
+            router.push('/dashboard');
+          } else if (userData.role === 'resident') {
+            router.push('/dashboard');
+          } else {
+            // Default redirect if role isn't specified
+            router.push('/dashboard');
+          }
+        } else {
+          // If user document doesn't exist, redirect to profile setup
+          router.push('/complete-profile');
+        }
+      } catch (err) {
+        console.error("Error checking user role:", err);
+        error.value = "Error during login. Please try again.";
+      }
+    };
+    
     const signInWithEmail = async () => {
       error.value = null;
       loading.value = true;
       
       try {
-        await signInWithEmailAndPassword(auth, email.value, password.value);
-        router.push('/dashboard');
+        const userCredential = await signInWithEmailAndPassword(auth, email.value, password.value);
+        await redirectBasedOnRole(userCredential.user);
       } catch (err) {
         switch(err.code) {
           case 'auth/user-not-found':
@@ -94,6 +133,9 @@ export default {
             break;
           case 'auth/wrong-password':
             error.value = 'Incorrect password';
+            break;
+          case 'auth/too-many-requests':
+            error.value = 'Account temporarily locked due to too many failed attempts';
             break;
           default:
             error.value = 'Failed to sign in. Please try again.';
@@ -110,10 +152,14 @@ export default {
       
       try {
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
-        router.push('/dashboard');
+        const userCredential = await signInWithPopup(auth, provider);
+        await redirectBasedOnRole(userCredential.user);
       } catch (err) {
-        error.value = 'Failed to sign in with Google. Please try again.';
+        if (err.code === 'auth/popup-closed-by-user') {
+          error.value = 'Google sign in was canceled';
+        } else {
+          error.value = 'Failed to sign in with Google. Please try again.';
+        }
         console.error(err);
       } finally {
         loading.value = false;
@@ -126,7 +172,8 @@ export default {
       error,
       loading,
       signInWithEmail,
-      signInWithGoogle
+      signInWithGoogle,
+      goToHome
     };
   }
 };
@@ -149,6 +196,29 @@ export default {
   width: 100%;
   max-width: 450px;
   overflow: hidden;
+  position: relative;
+}
+
+.btn-back-home {
+  background: none;
+  border: none;
+  color: #4caf50;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 0;
+  margin: 15px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-back-home:hover {
+  text-decoration: underline;
+}
+
+.btn-back-home svg {
+  width: 16px;
+  height: 16px;
 }
 
 .login-header {
@@ -298,5 +368,40 @@ export default {
 
 .register-link a:hover {
   text-decoration: underline;
+}
+
+/* Responsive styles for smaller screens */
+@media (max-width: 575.98px) {
+  .login-card {
+    max-width: 100%;
+    margin: 0 10px;
+  }
+
+  .login-header {
+    padding: 20px;
+  }
+
+  .login-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .login-form {
+    padding: 20px;
+  }
+
+  .login-form h2 {
+    font-size: 1.3rem;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 400px) {
+  .login-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .login-form {
+    padding: 15px;
+  }
 }
 </style>

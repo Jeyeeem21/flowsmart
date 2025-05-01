@@ -2,12 +2,20 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './registerServiceWorker'
 import router from './router'
-import './firebase/config';
 
-createApp(App).use(router).mount('#app')
-const auth = getAuth();
+// 🔥 Firebase imports
+import { getAuth, onAuthStateChanged } from 'firebase/auth' // ✅ Add this line
+import './firebase/config'
+
+const app = createApp(App).use(router).mount('#app')
+
+// ✅ Now it will work
+const auth = getAuth()
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    store.dispatch('setUser', user); // Vuex/Pinia update
+    // Example: store.dispatch('setUser', user)
+    console.log('User is signed in:', user)
+  } else {
+    console.log('No user signed in.')
   }
-});
+})

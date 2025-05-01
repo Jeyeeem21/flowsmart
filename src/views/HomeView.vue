@@ -19,15 +19,15 @@
           <p>Monitor your water usage in real-time, detect leaks, and save money with FlowSmart's intelligent water management system.</p>
           <div class="hero-buttons">
             <router-link to="/resident/register2" class="primary-button">Create Account</router-link>
-            <a href="#features" class="secondary-button">Learn More</a>
+            <button @click="scrollToFeatures" class="secondary-button">Learn More</button>
           </div>
         </div>
-        <div class="hero-image">
-          <img src="/placeholder.svg?height=400&width=600" alt="FlowSmart Dashboard" />
+       <div class="hero-image">
+          <img src="image1/flow-removebg.png" alt="FlowSmart Dashboard" class="dashboard-image" />
         </div>
       </div>
 
-      <div id="features" class="features-section">
+      <div id="features" class="features-section" ref="featuresSection">
         <h2>Key Features</h2>
         <div class="features-grid">
           <div class="feature-card">
@@ -87,9 +87,17 @@
     </footer>
   </div>
 </template>
+
 <script>
 export default {
-  name: 'HomeView'
+  methods: {
+    scrollToFeatures() {
+      const element = this.$refs.featuresSection;
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }
 }
 </script>
 
@@ -121,6 +129,31 @@ body {
 </style>
 
 <style scoped>
+/* Reset all margins and padding */
+/* Global Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+/* Remove any default margins from #app */
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+}
+
 .home-container {
   display: flex;
   flex-direction: column;
@@ -259,13 +292,23 @@ body {
   flex: 1;
   display: flex;
   justify-content: center;
+  align-items: center;
   min-width: 300px;
+  padding: 20px;
 }
 
-.hero-image img {
+.dashboard-image {
   max-width: 100%;
+  height: auto;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  display: block;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); /* Shadow directly on image */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dashboard-image:hover {
+  transform: translateY(-5px) scale(1.02); /* Lift and slight zoom on hover */
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2); /* Enhanced shadow on hover */
 }
 
 .features-section {
@@ -369,6 +412,19 @@ body {
     font-size: 1rem;
   }
 
+  .hero-image {
+    padding: 10px;
+  }
+
+  .dashboard-image {
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1); /* Lighter shadow for mobile */
+  }
+
+  .dashboard-image:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  }
+
   .features-grid {
     grid-template-columns: 1fr;
   }
@@ -379,6 +435,7 @@ body {
     padding: 0 20px;
   }
 }
+
 /* Tablet-specific styles */
 @media (min-width: 768px) and (max-width: 1023px) {
   /* Adjust layout for tablets */
@@ -397,6 +454,18 @@ body {
 
   .hero-content p {
     font-size: 1rem; /* Reduce font size for paragraphs */
+  }
+
+  .hero-image {
+    padding: 15px;
+  }
+
+  .dashboard-image {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); /* Slightly lighter shadow for tablets */
+  }
+
+  .dashboard-image:hover {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
   }
 
   .features-grid {

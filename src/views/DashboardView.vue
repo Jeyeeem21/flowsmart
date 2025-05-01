@@ -1,6 +1,11 @@
-```vue
 <template>
   <div class="analytics-charts">
+    <!-- Top Header with Real-Time Date -->
+    <div class="top-header">
+      <h2>Analytics Dashboard</h2>
+      <p class="realtime-date">Current Date: {{ currentTime }}</p>
+    </div>
+
     <!-- Cards Row -->
     <div class="cards-row">
       <!-- TDS Sensor Card -->
@@ -9,21 +14,18 @@
         <p><strong>TDS:</strong> {{ latestData.tds_ppm }} ppm <span class="status">({{ tdsStatus }})</span></p>
         <p><strong>Conductivity:</strong> {{ latestData.us_cm }} µS/cm</p>
       </div>
-
       <!-- Today's Total Usage Card -->
       <div class="usage-card">
         <h3>Daily Usage</h3>
         <p><strong>Liters:</strong> {{ todayTotal.liters.toFixed(2) }} liters</p>
         <p><strong>Cubic Meters:</strong> {{ todayTotal.cubic.toFixed(4) }} m³</p>
       </div>
-
       <!-- Monthly Usage Card -->
       <div class="usage-card">
         <h3>Monthly Usage</h3>
         <p><strong>Liters:</strong> {{ monthlyTotal.liters.toFixed(2) }} liters</p>
         <p><strong>Cubic Meters:</strong> {{ monthlyTotal.cubic.toFixed(4) }} m³</p>
       </div>
-
       <!-- Yearly Usage Card -->
       <div class="usage-card">
         <h3>Yearly Usage</h3>
@@ -92,7 +94,6 @@
           <canvas ref="monthlyChartContainer"></canvas>
         </div>
       </div>
-
       <!-- Yearly Chart -->
       <div class="chart-wrapper yearly-chart-wrapper">
         <div class="chart-header">
@@ -164,9 +165,11 @@ export default {
       if (tds >= 500) return 'status-neutral';
       return 'status-safe';
     },
-    todayDate() {
-      return new Date().toLocaleDateString();
-    }
+    currentTime() {
+  const date = new Date();
+  return date.toLocaleDateString(); // Default format: MM/DD/YYYY
+}
+
   },
   methods: {
     handleUnitChange(unit) {
@@ -174,17 +177,33 @@ export default {
       this.processData(this.allData);
     },
     handleFilterChange() {
-      this.fetchData();
+      this.processData(this.allData);
     },
     async fetchData() {
       this.loading = true;
       try {
         const snapshot = await getDocs(collection(db, 'SensorData'));
         if (!snapshot.empty) {
-          const firebaseData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+          const firebaseData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            let timestamp = data.timestamp;
+            if (timestamp && typeof timestamp === 'string') {
+              const parts = timestamp.split('T');
+              if (parts[0]) {
+                const dateParts = parts[0].split('-');
+                if (dateParts.length === 3) {
+                  dateParts[1] = dateParts[1].padStart(2, '0');
+                  dateParts[2] = dateParts[2].padStart(2, '0');
+                  timestamp = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}T${parts[1] || '00:00:00'}`;
+                }
+              }
+            }
+            return {
+              id: doc.id,
+              ...data,
+              timestamp
+            };
+          });
           this.allData = firebaseData;
           this.processData(firebaseData);
         } else {
@@ -203,12 +222,24 @@ export default {
         const latestSnapshot = await getDocs(latestQuery);
         if (!latestSnapshot.empty) {
           const latestDoc = latestSnapshot.docs[0].data();
-          this.latestData = {
-            tds_ppm: latestDoc.tds_ppm || 0,
-            us_cm: latestDoc.us_cm || 0,
-            liters: latestDoc.liters || 0,
-            timestamp: latestDoc.timestamp || ''
-          };
+          let timestamp = latestDoc.timestamp;
+          if (timestamp && typeof timestamp === 'string') {
+            const parts = timestamp.split('T');
+            if (parts[0]) {
+              const dateParts = parts[0].split('-');
+              if (dateParts.length === 3) {
+                dateParts[1] = dateParts[1].padStart(2, '0');
+                dateParts[2] = dateParts[2].padStart(2, '0');
+                timestamp = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}T${parts[1] || '00:00:00'}`;
+              }
+            }
+            this.latestData = {
+              tds_ppm: latestDoc.tds_ppm || 0,
+              us_cm: latestDoc.us_cm || 0,
+              liters: latestDoc.liters || 0,
+              timestamp: timestamp || ''
+            };
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -226,50 +257,48 @@ export default {
       const dailyMap = {};
       const monthlyMap = {};
       const yearlyMap = {};
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const currentDay = now.getDate();
 
       let todayLiters = 0;
       let monthlyLiters = 0;
       let yearlyLiters = 0;
 
-      const todayKey = `${currentYear}-${currentMonth}-${currentDay}`;
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
       const monthKey = `${this.selectedYear}-${this.selectedMonth}`;
       const yearKey = `${this.selectedYearForMonthly}`;
 
+      const yearsSet = new Set();
+
       data.forEach(entry => {
+        if (!entry.timestamp || !entry.liters) return;
+
         const date = new Date(entry.timestamp);
-        if (date > now) return; // Skip future dates
+        const liters = parseFloat(entry.liters);
         const year = date.getFullYear();
         const month = date.getMonth();
         const day = date.getDate();
-        const keyDay = `${year}-${month}-${day}`;
-        const keyMonth = `${year}-${month}`;
-        const keyYear = `${year}`;
-        const liters = entry.liters || 0;
 
-        const value = this.unit === 'cubic' ? liters / 1000 : liters;
-        if (!dailyMap[keyDay]) dailyMap[keyDay] = 0;
-        dailyMap[keyDay] += value;
+        const dKey = `${year}-${month}-${day}`;
+        const mKey = `${year}-${month}`;
+        const yKey = `${year}`;
 
-        if (!monthlyMap[keyMonth]) monthlyMap[keyMonth] = 0;
-        monthlyMap[keyMonth] += value;
+        yearsSet.add(year);
 
-        if (!yearlyMap[keyYear]) yearlyMap[keyYear] = 0;
-        yearlyMap[keyYear] += value;
+        if (!dailyMap[dKey]) dailyMap[dKey] = 0;
+        dailyMap[dKey] += liters;
 
-        if (keyDay === todayKey) {
-          todayLiters += liters;
-        }
-        if (keyMonth === monthKey) {
-          monthlyLiters += liters;
-        }
-        if (keyYear === yearKey) {
-          yearlyLiters += liters;
-        }
+        if (!monthlyMap[mKey]) monthlyMap[mKey] = 0;
+        monthlyMap[mKey] += liters;
+
+        if (!yearlyMap[yKey]) yearlyMap[yKey] = 0;
+        yearlyMap[yKey] += liters;
+
+        if (dKey === todayKey) todayLiters += liters;
+        if (mKey === monthKey) monthlyLiters += liters;
+        if (yKey === yearKey) yearlyLiters += liters;
       });
+
+      this.availableYears = Array.from(yearsSet).sort();
 
       this.todayTotal = {
         liters: todayLiters,
@@ -284,148 +313,73 @@ export default {
         cubic: yearlyLiters / 1000
       };
 
-      this.availableYears = [...new Set(data.map(entry => {
-        const date = new Date(entry.timestamp);
-        return date.getFullYear();
-      }))].filter(year => year <= currentYear).sort((a, b) => b - a);
-
-      // Daily chart data with zeros for missing days
-      const year = this.selectedYear;
-      const month = this.selectedMonth;
-      const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-      this.dailyChartData = [];
-      for (let day = 1; day <= totalDaysInMonth; day++) {
-        const date = new Date(year, month, day);
-        if (date > now) break; // Stop at current date
-        const key = `${year}-${month}-${day}`;
-        let value = dailyMap[key] || 0;
-        this.dailyChartData.push({ label: day, value, percentageChange: 'N/A' });
+      // Generate full daily data for selected month
+      const daysInMonth = new Date(this.selectedYear, this.selectedMonth + 1, 0).getDate();
+      const dailyData = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = `${this.selectedYear}-${this.selectedMonth}-${day}`;
+        const value = dailyMap[key] || 0;
+        dailyData.push([key, value]);
       }
+      this.dailyChartData = dailyData.sort(([a], [b]) => new Date(a) - new Date(b));
 
-      // Calculate percentage change for daily chart
-      this.dailyChartData.forEach((data, index) => {
-        if (index > 0) {
-          const prevValue = this.dailyChartData[index - 1].value;
-          const currentValue = data.value;
-          if (prevValue !== 0) {
-            data.percentageChange = ((currentValue - prevValue) / prevValue * 100).toFixed(2);
-          } else {
-            data.percentageChange = currentValue === 0 ? '0.00' : '∞';
-          }
-        }
-      });
-
-      // Monthly chart data with zeros for missing months
-      this.monthlyChartData = [];
-      for (let m = 0; m < 12; m++) {
-        if (year === currentYear && m > currentMonth) break; // Skip future months
-        const key = `${this.selectedYearForMonthly}-${m}`;
-        let value = monthlyMap[key] || 0;
-        this.monthlyChartData.push({ label: this.months[m], value, percentageChange: 'N/A' });
+      // Generate full monthly data for selected year
+      const monthlyData = [];
+      for (let month = 0; month < 12; month++) {
+        const key = `${this.selectedYearForMonthly}-${month}`;
+        const value = monthlyMap[key] || 0;
+        monthlyData.push([key, value]);
       }
+      this.monthlyChartData = monthlyData.sort(([a], [b]) => new Date(a) - new Date(b));
 
-      // Calculate percentage change for monthly chart
-      this.monthlyChartData.forEach((data, index) => {
-        if (index > 0) {
-          const prevValue = this.monthlyChartData[index - 1].value;
-          const currentValue = data.value;
-          if (prevValue !== 0) {
-            data.percentageChange = ((currentValue - prevValue) / prevValue * 100).toFixed(2);
-          } else {
-            data.percentageChange = currentValue === 0 ? '0.00' : '∞';
-          }
-        }
-      });
+      this.yearlyChartData = Object.entries(yearlyMap).sort(([a], [b]) => a - b);
 
-      // Yearly chart data with zeros for missing years
-      this.yearlyChartData = [];
-      const years = Object.keys(yearlyMap).filter(key => parseInt(key) <= currentYear).sort();
-      years.forEach(key => {
-        let value = yearlyMap[key] || 0;
-        this.yearlyChartData.push({ label: key, value, percentageChange: 'N/A' });
-      });
-
-      // Calculate percentage change for yearly chart
-      this.yearlyChartData.forEach((data, index) => {
-        if (index > 0) {
-          const prevValue = this.yearlyChartData[index - 1].value;
-          const currentValue = data.value;
-          if (prevValue !== 0) {
-            data.percentageChange = ((currentValue - prevValue) / prevValue * 100).toFixed(2);
-          } else {
-            data.percentageChange = currentValue === 0 ? '0.00' : '∞';
-          }
-        }
-      });
-
-      // Initialize with empty data if no years are available
-      if (!this.yearlyChartData.length) {
-        this.yearlyChartData.push({ label: currentYear.toString(), value: 0, percentageChange: 'N/A' });
-      }
-      if (!this.monthlyChartData.length) {
-        this.monthlyChartData.push({ label: this.months[currentMonth], value: 0, percentageChange: 'N/A' });
-      }
-      if (!this.dailyChartData.length) {
-        this.dailyChartData.push({ label: currentDay.toString(), value: 0, percentageChange: 'N/A' });
-      }
-
-      this.$nextTick(() => {
-        this.updateCharts();
-      });
+      this.renderCharts();
     },
-    updateCharts() {
-      console.log('Updating charts...');
-      console.log('Daily canvas:', this.$refs.dailyChartContainer);
-      console.log('Monthly canvas:', this.$refs.monthlyChartContainer);
-      console.log('Yearly canvas:', this.$refs.yearlyChartContainer);
-      this.createDailyChart();
-      this.createMonthlyChart();
-      this.createYearlyChart();
-    },
-    createChart(ctx, labels, dataValues, percentageChanges, type = 'line') {
-      if (!ctx) {
-        console.error('Canvas context is null, cannot create chart');
-        return null;
-      }
-      return new Chart(ctx, {
-        type,
+    renderCharts() {
+      const getValues = (dataArr) => dataArr.map(([_, v]) => this.unit === 'cubic' ? v / 1000 : v);
+
+      // Determine if mobile view (≤ 575.98px)
+      const isMobile = window.innerWidth <= 575.98;
+
+      // Daily Chart
+      if (this.dailyChart) this.dailyChart.destroy();
+      this.dailyChart = new Chart(this.$refs.dailyChartContainer, {
+        type: 'line',
         data: {
-          labels: labels.length ? labels : ['No Data'],
+          labels: this.dailyChartData.map(([k]) => {
+            const [, , day] = k.split('-');
+            return parseInt(day);
+          }),
           datasets: [{
-            label: `Usage (${this.unitLabel})`,
-            data: dataValues.length ? dataValues : [0],
-            fill: type === 'line' ? false : true,
-            borderColor: '#4caf50',
-            backgroundColor: type === 'bar' ? '#4caf50' : undefined,
-            tension: type === 'line' ? 0.3 : undefined,
-            borderRadius: type === 'bar' ? 6 : undefined,
-            borderSkipped: type === 'bar' ? false : undefined
+            label: `Daily ${this.unitLabel} Usage`,
+            data: getValues(this.dailyChartData),
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            fill: true,
+            tension: 0.4
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              display: type === 'bar',
-              position: 'top'
-            },
             tooltip: {
-              enabled: labels.length > 0,
               callbacks: {
-                label: function(context) {
+                label: (context) => {
                   const index = context.dataIndex;
-                  const value = context.parsed.y.toFixed(2);
-                  const percentageChange = percentageChanges[index] || 'N/A';
-                  let changeText = '';
-                  if (percentageChange !== 'N/A' && percentageChange !== '∞') {
-                    changeText = percentageChange >= 0
-                      ? ` (+${percentageChange}%)`
-                      : ` (${percentageChange}%)`;
-                  } else if (percentageChange === '∞') {
-                    changeText = ' (∞%)';
-                  }
-                  return `${context.dataset.label}: ${value} ${changeText}`;
+                  const currentValue = context.raw;
+                  const prevValue = index > 0 ? getValues(this.dailyChartData)[index - 1] : null;
+                  const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
+                  if (prevValue !== null && prevValue !== 0) {
+                    const change = ((currentValue - prevValue) / prevValue) * 100;
+                    const direction = change >= 0 ? '↑' : '↓';
+                    labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous day`);
+                  }else{
+                   labels.push(`Change: ↑∞% (previous value was 0)`);}
+
+
+                  return labels;
                 }
               }
             }
@@ -436,79 +390,123 @@ export default {
               title: { display: true, text: this.unitLabel }
             },
             x: {
+              title: { display: true, text: 'Day' },
               ticks: {
-                autoSkip: false
+                stepSize: isMobile ? 2 : 1, // Show every other day (1, 3, 5, ...) on mobile, every day on larger screens
+                callback: function(value) {
+                  // Ensure the tick starts at 1 and increments correctly
+                  return isMobile ? (value % 2 === 0 ? value + 1 : null) : value + 1;
+                }
               }
             }
           }
         }
       });
-    },
-    createDailyChart() {
-      const canvas = this.$refs.dailyChartContainer;
-      if (!canvas || !canvas.getContext) {
-        console.error('Daily chart canvas not found or not ready');
-        return;
-      }
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        console.error('Failed to get 2D context for daily chart');
-        return;
-      }
-      if (this.dailyChart) this.dailyChart.destroy();
-      const labels = this.dailyChartData.map(d => d.label);
-      const dataValues = this.dailyChartData.map(d => d.value);
-      const percentageChanges = this.dailyChartData.map(d => d.percentageChange);
-      this.dailyChart = this.createChart(ctx, labels, dataValues, percentageChanges, 'line');
-    },
-    createMonthlyChart() {
-      const canvas = this.$refs.monthlyChartContainer;
-      if (!canvas || !canvas.getContext) {
-        console.error('Monthly chart canvas not found or not ready');
-        return;
-      }
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        console.error('Failed to get 2D context for monthly chart');
-        return;
-      }
+
+      // Monthly Chart
       if (this.monthlyChart) this.monthlyChart.destroy();
-      const labels = this.monthlyChartData.map(d => d.label);
-      const dataValues = this.monthlyChartData.map(d => d.value);
-      const percentageChanges = this.monthlyChartData.map(d => d.percentageChange);
-      this.monthlyChart = this.createChart(ctx, labels, dataValues, percentageChanges, 'line');
-    },
-    createYearlyChart() {
-      const canvas = this.$refs.yearlyChartContainer;
-      if (!canvas || !canvas.getContext) {
-        console.error('Yearly chart canvas not found or not ready');
-        return;
-      }
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        console.error('Failed to get 2D context for yearly chart');
-        return;
-      }
+      this.monthlyChart = new Chart(this.$refs.monthlyChartContainer, {
+        type: 'bar',
+        data: {
+          labels: this.monthlyChartData.map(([k]) => this.months[parseInt(k.split('-')[1])]),
+          datasets: [{
+            label: `Monthly ${this.unitLabel} Usage`,
+            data: getValues(this.monthlyChartData),
+            backgroundColor: 'rgba(75, 192, 192, 0.5)'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const index = context.dataIndex;
+                  const currentValue = context.raw;
+                  const prevValue = index > 0 ? getValues(this.monthlyChartData)[index - 1] : null;
+                  const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
+                  if (prevValue !== null && prevValue !== 0) {
+                    const change = ((currentValue - prevValue) / prevValue) * 100;
+                    const direction = change >= 0 ? '↑' : '↓';
+                    labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous month`);
+                  }else{
+                   labels.push(`Change: ↑∞% (previous value was 0)`);}
+                  return labels;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: this.unitLabel }
+            },
+            x: {
+              title: { display: true, text: 'Month' }
+            }
+          }
+        }
+      });
+
+      // Yearly Chart
       if (this.yearlyChart) this.yearlyChart.destroy();
-      const labels = this.yearlyChartData.map(d => d.label);
-      const dataValues = this.yearlyChartData.map(d => d.value);
-      const percentageChanges = this.yearlyChartData.map(d => d.percentageChange);
-      this.yearlyChart = this.createChart(ctx, labels, dataValues, percentageChanges, 'bar');
+      this.yearlyChart = new Chart(this.$refs.yearlyChartContainer, {
+        type: 'bar',
+        data: {
+          labels: this.yearlyChartData.map(([k]) => k),
+          datasets: [{
+            label: `Yearly ${this.unitLabel} Usage`,
+            data: getValues(this.yearlyChartData),
+            backgroundColor: 'rgba(153, 102, 255, 0.5)'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const index = context.dataIndex;
+                  const currentValue = context.raw;
+                  const prevValue = index > 0 ? getValues(this.yearlyChartData)[index - 1] : null;
+                  const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
+                  if (prevValue !== null && prevValue !== 0) {
+                    const change = ((currentValue - prevValue) / prevValue) * 100;
+                    const direction = change >= 0 ? '↑' : '↓';
+                    labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous year`);
+                  }
+                  else{
+                   labels.push(`Change: ↑∞% (previous value was 0)`);}
+                  return labels;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: this.unitLabel }
+            },
+            x: {
+              title: { display: true, text: 'Year' }
+            }
+          }
+        }
+      });
     },
     startAutoRefresh() {
       this.refreshInterval = setInterval(() => {
         this.fetchData();
-      }, 10000);
+      }, 300000); // Refresh every 5 minutes
     },
     stopAutoRefresh() {
       clearInterval(this.refreshInterval);
-      this.refreshInterval = null;
     }
   },
   mounted() {
-    this.$nextTick(() => {
-      this.fetchData();
-    });
+    this.fetchData();
     this.startAutoRefresh();
   },
   beforeUnmount() {
@@ -521,6 +519,21 @@ export default {
 </script>
 
 <style scoped>
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.realtime-date {
+  font-size: 0.9rem;
+  color: var(--text-medium);
+  margin: 0;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
 
 :root {
@@ -553,41 +566,83 @@ export default {
 
 /* Cards Row */
 .cards-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 /* Sensor Card */
 .sensor-card {
-  background: white;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(8px);
   padding: 1rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  flex: 1 1 250px;
-  transition: background-color 0.3s ease;
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #388e3c;
+  flex: 1;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sensor-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.9));
+}
+
+.sensor-card:focus-within {
+  outline: 2px solid #388e3c;
+  outline-offset: 2px;
 }
 
 .sensor-card h3 {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   color: var(--secondary-color);
   margin: 0 0 0.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sensor-card h3::before {
+  content: '\f6c1';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: #388e3c;
+  font-size: 0.9rem;
 }
 
 .sensor-card p {
-  margin: 0.25rem 0;
-  font-size: 0.9rem;
+  margin: 0.2rem 0;
+  font-size: 0.8rem;
   color: var(--text-dark);
+  line-height: 1.3;
 }
 
 .sensor-card .status {
   font-weight: 500;
   text-transform: capitalize;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sensor-card .status:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .status-safe {
-  background-color: rgba(76, 175, 80, 0.1);
+  background-color: rgba(76, 175, 80, 0.2);
   border: 1px solid var(--status-safe);
 }
 
@@ -596,7 +651,7 @@ export default {
 }
 
 .status-neutral {
-  background-color: rgba(255, 193, 7, 0.1);
+  background-color: rgba(255, 193, 7, 0.2);
   border: 1px solid var(--status-neutral);
 }
 
@@ -605,7 +660,7 @@ export default {
 }
 
 .status-contaminated {
-  background-color: rgba(211, 47, 47, 0.1);
+  background-color: rgba(211, 47, 47, 0.2);
   border: 1px solid var(--status-contaminated);
 }
 
@@ -615,25 +670,138 @@ export default {
 
 /* Usage Card */
 .usage-card {
-  background: white;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(8px);
   padding: 1rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  flex: 1 1 200px;
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #388e3c;
+  flex: 1;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.usage-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.9));
+}
+
+.usage-card:focus-within {
+  outline: 2px solid #388e3c;
+  outline-offset: 2px;
 }
 
 .usage-card h3 {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   color: var(--secondary-color);
   margin: 0 0 0.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.usage-card h3::before {
+  content: '\f080';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: #168e3c;
+  font-size: 0.9rem;
 }
 
 .usage-card p {
-  margin: 0.25rem 0;
-  font-size: 0.9rem;
+  margin: 0.2rem 0;
+  font-size: 0.8rem;
   color: var(--text-dark);
+  line-height: 1.3;
 }
 
+/* Accent Line */
+.sensor-card::before,
+.usage-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #388e3c, var(--secondary-color));
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+/* Desktop - Large (4 cards in a row) */
+@media (min-width: 992px) {
+  .cards-row {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+  }
+}
+
+/* Tablet - Medium */
+@media (min-width: 768px) and (max-width: 991.99px) {
+  .cards-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+}
+/* Mobile - Small Devices */
+@media (max-width: 575.98px) {
+  .cards-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Two cards per row */
+    gap: 0.75rem;
+  }
+
+  .sensor-card,
+  .usage-card {
+    padding: 0.75rem;
+    min-height: 120px;
+  }
+
+  .sensor-card h3,
+  .usage-card h3 {
+    font-size: 0.95rem;
+  }
+
+  .sensor-card p,
+  .usage-card p {
+    font-size: 0.75rem;
+  }
+
+  .sensor-card .status {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+  }
+}
+/* Extra Small Screens */
+@media (max-width: 400px) {
+  .cards-row {
+    grid-template-columns: 1fr; /* One card per row */
+    gap: 0.75rem;
+  }
+
+  .sensor-card,
+  .usage-card {
+    padding: 0.65rem;
+    min-height: 110px;
+  }
+
+  .sensor-card h3,
+  .usage-card h3 {
+    font-size: 0.9rem;
+  }
+
+  .sensor-card p,
+  .usage-card p {
+    font-size: 0.7rem;
+  }
+}
 /* Header Controls */
 .header-controls {
   display: flex;
@@ -846,7 +1014,7 @@ canvas {
     align-items: flex-start;
   }
   .unit-toggle {
-    width: 100%;
+    width: 40%;
     justify-content: space-between;
   }
   .toggle-button {
@@ -897,8 +1065,8 @@ canvas {
   .unit-label {
     margin: 0;
   }
-  .toggle-button {
-    width: 100%;
+  .toggle-container {
+    width: 40%;
     text-align: center;
   }
 }
