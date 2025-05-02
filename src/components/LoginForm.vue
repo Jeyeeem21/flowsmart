@@ -104,10 +104,10 @@ export default {
           if (userData.role === 'admin') {
             router.push('/dashboard');
           } else if (userData.role === 'resident') {
-            router.push('/dashboard');
+            router.push('/residentdashboard');
           } else {
             // Default redirect if role isn't specified
-            router.push('/dashboard');
+            router.push('/userdashboard');
           }
         } else {
           // If user document doesn't exist, redirect to profile setup

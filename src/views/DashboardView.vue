@@ -1,5 +1,11 @@
 <template>
   <div class="analytics-charts">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- Error Message Display -->
+    <div v-if="errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
+
     <!-- Top Header with Real-Time Date -->
     <div class="top-header">
       <h2>Analytics Dashboard</h2>
@@ -36,7 +42,7 @@
 
     <!-- Header Controls -->
     <div class="header-controls">
-      <h2>Analytics</h2>
+     
       <div class="unit-toggle">
         <span class="unit-label">Unit:</span>
         <div class="toggle-container">
@@ -106,12 +112,13 @@
     </div>
   </div>
 </template>
-
 <script>
-import { db } from '@/firebase/config';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { Chart, registerables } from 'chart.js';
-Chart.register(...registerables);
+import { db, auth } from '@/firebase/config';
+import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { Chart, LineController, BarController, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Tooltip, Filler } from 'chart.js';
+
+Chart.register(LineController, BarController, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Tooltip, Filler);
 
 export default {
   name: 'Analytics',
@@ -119,6 +126,7 @@ export default {
     return {
       unit: 'cubic',
       loading: false,
+      errorMessage: '',
       selectedMonth: new Date().getMonth(),
       selectedYear: new Date().getFullYear(),
       selectedYearForMonthly: new Date().getFullYear(),
@@ -138,7 +146,9 @@ export default {
       dailyChart: null,
       monthlyChart: null,
       yearlyChart: null,
-      refreshInterval: null
+      refreshInterval: null,
+      userRole: null,
+      userDeviceId: null
     };
   },
   computed: {
@@ -166,12 +176,19 @@ export default {
       return 'status-safe';
     },
     currentTime() {
-  const date = new Date();
-  return date.toLocaleDateString(); // Default format: MM/DD/YYYY
-}
-
+      const date = new Date();
+      return date.toLocaleDateString();
+    }
   },
   methods: {
+    resetData() {
+      this.allData = [];
+      this.processData([]);
+      this.latestData = { tds_ppm: 0, us_cm: 0, liters: 0, timestamp: '' };
+      this.todayTotal = { liters: 0, cubic: 0 };
+      this.monthlyTotal = { liters: 0, cubic: 0 };
+      this.yearlyTotal = { liters: 0, cubic: 0 };
+    },
     handleUnitChange(unit) {
       this.unit = unit;
       this.processData(this.allData);
@@ -181,74 +198,85 @@ export default {
     },
     async fetchData() {
       this.loading = true;
+      this.errorMessage = '';
       try {
-        const snapshot = await getDocs(collection(db, 'SensorData'));
-        if (!snapshot.empty) {
-          const firebaseData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            let timestamp = data.timestamp;
-            if (timestamp && typeof timestamp === 'string') {
-              const parts = timestamp.split('T');
-              if (parts[0]) {
-                const dateParts = parts[0].split('-');
-                if (dateParts.length === 3) {
-                  dateParts[1] = dateParts[1].padStart(2, '0');
-                  dateParts[2] = dateParts[2].padStart(2, '0');
-                  timestamp = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}T${parts[1] || '00:00:00'}`;
-                }
-              }
-            }
-            return {
-              id: doc.id,
-              ...data,
-              timestamp
-            };
-          });
-          this.allData = firebaseData;
-          this.processData(firebaseData);
-        } else {
-          this.processData([]);
-          this.latestData = { tds_ppm: 0, us_cm: 0, liters: 0, timestamp: '' };
-          this.todayTotal = { liters: 0, cubic: 0 };
-          this.monthlyTotal = { liters: 0, cubic: 0 };
-          this.yearlyTotal = { liters: 0, cubic: 0 };
+        const user = auth.currentUser;
+        if (!user) throw new Error('No user is logged in');
+
+        // Get user document
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists()) throw new Error('User document not found');
+        
+        const userData = userDoc.data();
+        this.userRole = userData.role || 'resident';
+        this.userDeviceId = userData.deviceId || null;
+
+        // For residents, verify deviceId exists
+        if (this.userRole === 'resident' && !this.userDeviceId) {
+          this.resetData();
+          throw new Error('No water meter device assigned to your account. Please contact support.');
         }
 
-        const latestQuery = query(
-          collection(db, 'SensorData'),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        );
+        // Build query based on user role
+        let q;
+        if (this.userRole === 'admin') {
+          q = query(collection(db, 'SensorData'), orderBy('timestamp', 'desc'));
+        } else {
+          q = query(
+            collection(db, 'SensorData'),
+            where('id', '==', this.userDeviceId),
+            orderBy('timestamp', 'desc')
+          );
+        }
+
+        const snapshot = await getDocs(q);
+        console.log('Resident query snapshot:', snapshot.docs.map(doc => doc.data()));
+        
+        if (snapshot.empty) {
+          this.resetData();
+          throw new Error('No water usage data available yet for your device.');
+        }
+
+        // Process data
+        this.allData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Get latest data point
+        const latestQuery = this.userRole === 'admin'
+          ? query(collection(db, 'SensorData'), orderBy('timestamp', 'desc'), limit(1))
+          : query(
+              collection(db, 'SensorData'),
+              where('id', '==', this.userDeviceId),
+              orderBy('timestamp', 'desc'),
+              limit(1)
+            );
+
         const latestSnapshot = await getDocs(latestQuery);
         if (!latestSnapshot.empty) {
-          const latestDoc = latestSnapshot.docs[0].data();
-          let timestamp = latestDoc.timestamp;
-          if (timestamp && typeof timestamp === 'string') {
-            const parts = timestamp.split('T');
-            if (parts[0]) {
-              const dateParts = parts[0].split('-');
-              if (dateParts.length === 3) {
-                dateParts[1] = dateParts[1].padStart(2, '0');
-                dateParts[2] = dateParts[2].padStart(2, '0');
-                timestamp = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}T${parts[1] || '00:00:00'}`;
-              }
-            }
-            this.latestData = {
-              tds_ppm: latestDoc.tds_ppm || 0,
-              us_cm: latestDoc.us_cm || 0,
-              liters: latestDoc.liters || 0,
-              timestamp: timestamp || ''
-            };
-          }
+          this.latestData = latestSnapshot.docs[0].data();
         }
+
+        this.processData(this.allData);
+
       } catch (error) {
-        console.error("Error fetching data:", error);
-        alert("Failed to load data. Please try again.");
-        this.processData([]);
-        this.latestData = { tds_ppm: 0, us_cm: 0, liters: 0, timestamp: '' };
-        this.todayTotal = { liters: 0, cubic: 0 };
-        this.monthlyTotal = { liters: 0, cubic: 0 };
-        this.yearlyTotal = { liters: 0, cubic: 0 };
+        console.error('Error fetching data:', error);
+        
+        let errorMessage = 'Failed to load data. Please try again.';
+        if (error.message.includes('No water meter device')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('No water usage data')) {
+          errorMessage = error.message;
+        } else if (error.code === 'permission-denied') {
+          errorMessage = 'You do not have permission to view this data.';
+        }
+
+        this.errorMessage = errorMessage;
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 5000);
+
       } finally {
         this.loading = false;
       }
@@ -313,7 +341,6 @@ export default {
         cubic: yearlyLiters / 1000
       };
 
-      // Generate full daily data for selected month
       const daysInMonth = new Date(this.selectedYear, this.selectedMonth + 1, 0).getDate();
       const dailyData = [];
       for (let day = 1; day <= daysInMonth; day++) {
@@ -323,7 +350,6 @@ export default {
       }
       this.dailyChartData = dailyData.sort(([a], [b]) => new Date(a) - new Date(b));
 
-      // Generate full monthly data for selected year
       const monthlyData = [];
       for (let month = 0; month < 12; month++) {
         const key = `${this.selectedYearForMonthly}-${month}`;
@@ -337,9 +363,17 @@ export default {
       this.renderCharts();
     },
     renderCharts() {
-      const getValues = (dataArr) => dataArr.map(([_, v]) => this.unit === 'cubic' ? v / 1000 : v);
+      if (!this.$refs.dailyChartContainer || !this.$refs.monthlyChartContainer || !this.$refs.yearlyChartContainer) {
+        console.warn('Canvas elements are not available yet.');
+        return;
+      }
 
-      // Determine if mobile view (≤ 575.98px)
+      if (!this.dailyChartData.length || !this.monthlyChartData.length || !this.yearlyChartData.length) {
+        console.warn('Chart data is empty or invalid.');
+        return;
+      }
+
+      const getValues = (dataArr) => dataArr.map(([_, v]) => this.unit === 'cubic' ? v / 1000 : v);
       const isMobile = window.innerWidth <= 575.98;
 
       // Daily Chart
@@ -375,10 +409,9 @@ export default {
                     const change = ((currentValue - prevValue) / prevValue) * 100;
                     const direction = change >= 0 ? '↑' : '↓';
                     labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous day`);
-                  }else{
-                   labels.push(`Change: ↑∞% (previous value was 0)`);}
-
-
+                  } else {
+                    labels.push(`Change: ↑∞% (previous value was 0)`);
+                  }
                   return labels;
                 }
               }
@@ -392,9 +425,8 @@ export default {
             x: {
               title: { display: true, text: 'Day' },
               ticks: {
-                stepSize: isMobile ? 2 : 1, // Show every other day (1, 3, 5, ...) on mobile, every day on larger screens
+                stepSize: isMobile ? 2 : 1,
                 callback: function(value) {
-                  // Ensure the tick starts at 1 and increments correctly
                   return isMobile ? (value % 2 === 0 ? value + 1 : null) : value + 1;
                 }
               }
@@ -430,8 +462,9 @@ export default {
                     const change = ((currentValue - prevValue) / prevValue) * 100;
                     const direction = change >= 0 ? '↑' : '↓';
                     labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous month`);
-                  }else{
-                   labels.push(`Change: ↑∞% (previous value was 0)`);}
+                  } else {
+                    labels.push(`Change: ↑∞% (previous value was 0)`);
+                  }
                   return labels;
                 }
               }
@@ -476,9 +509,9 @@ export default {
                     const change = ((currentValue - prevValue) / prevValue) * 100;
                     const direction = change >= 0 ? '↑' : '↓';
                     labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous year`);
+                  } else {
+                    labels.push(`Change: ↑∞% (previous value was 0)`);
                   }
-                  else{
-                   labels.push(`Change: ↑∞% (previous value was 0)`);}
                   return labels;
                 }
               }
@@ -502,12 +535,16 @@ export default {
       }, 300000); // Refresh every 5 minutes
     },
     stopAutoRefresh() {
-      clearInterval(this.refreshInterval);
+      if (this.refreshInterval) {
+        clearInterval(this.refreshInterval);
+      }
     }
   },
   mounted() {
-    this.fetchData();
-    this.startAutoRefresh();
+    this.$nextTick(() => {
+      this.fetchData();
+      this.startAutoRefresh();
+    });
   },
   beforeUnmount() {
     this.stopAutoRefresh();
@@ -519,21 +556,6 @@ export default {
 </script>
 
 <style scoped>
-.top-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.realtime-date {
-  font-size: 0.9rem;
-  color: var(--text-medium);
-  margin: 0;
-}
-
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
 
 :root {
@@ -562,6 +584,37 @@ export default {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #c62828;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Top Header */
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.realtime-date {
+  font-size: 0.9rem;
+  color: var(--text-medium);
+  margin: 0;
 }
 
 /* Cards Row */
@@ -735,73 +788,6 @@ export default {
   border-radius: 0.75rem 0.75rem 0 0;
 }
 
-/* Desktop - Large (4 cards in a row) */
-@media (min-width: 992px) {
-  .cards-row {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.25rem;
-  }
-}
-
-/* Tablet - Medium */
-@media (min-width: 768px) and (max-width: 991.99px) {
-  .cards-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-}
-/* Mobile - Small Devices */
-@media (max-width: 575.98px) {
-  .cards-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr); /* Two cards per row */
-    gap: 0.75rem;
-  }
-
-  .sensor-card,
-  .usage-card {
-    padding: 0.75rem;
-    min-height: 120px;
-  }
-
-  .sensor-card h3,
-  .usage-card h3 {
-    font-size: 0.95rem;
-  }
-
-  .sensor-card p,
-  .usage-card p {
-    font-size: 0.75rem;
-  }
-
-  .sensor-card .status {
-    padding: 0.2rem 0.4rem;
-    font-size: 0.75rem;
-  }
-}
-/* Extra Small Screens */
-@media (max-width: 400px) {
-  .cards-row {
-    grid-template-columns: 1fr; /* One card per row */
-    gap: 0.75rem;
-  }
-
-  .sensor-card,
-  .usage-card {
-    padding: 0.65rem;
-    min-height: 110px;
-  }
-
-  .sensor-card h3,
-  .usage-card h3 {
-    font-size: 0.9rem;
-  }
-
-  .sensor-card p,
-  .usage-card p {
-    font-size: 0.7rem;
-  }
-}
 /* Header Controls */
 .header-controls {
   display: flex;
@@ -895,10 +881,11 @@ export default {
   width: 100%;
   flex: 1 1 100%;
   min-width: 280px;
+  max-width: 600px;
 }
 
-.daily-chart-wrapper .chart-content {
-  min-height: 100px;
+.daily-chart-wrapper {
+  max-width: 1200px;
 }
 
 .chart-header {
@@ -943,12 +930,23 @@ export default {
 .chart-content {
   position: relative;
   min-height: 250px;
+  max-height: 350px;
   width: 100%;
+}
+
+.daily-chart-wrapper .chart-content {
+  min-height: 350px;
+  max-height: 450px;
 }
 
 canvas {
   width: 100% !important;
   height: 100% !important;
+  max-height: 350px !important;
+}
+
+.daily-chart-wrapper canvas {
+  max-height: 450px !important;
 }
 
 .loading {
@@ -958,56 +956,102 @@ canvas {
   font-size: 0.9rem;
 }
 
-/* Tablet - Medium */
-@media (min-width: 768px) {
+/* Desktop - Large (4 cards in a row) */
+@media (min-width: 992px) {
+  .analytics-charts {
+    padding: 1.5rem;
+  }
+  .cards-row {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+  }
   .charts-row {
     flex-direction: row;
     flex-wrap: wrap;
   }
   .chart-wrapper {
     flex: 1 1 calc(50% - 0.5rem);
+    max-width: 600px;
+  }
+  .daily-chart-wrapper {
+    flex: 1 1 100%;
+    max-width: 1200px;
   }
   .chart-content {
     min-height: 300px;
+    max-height: 350px;
   }
-  .chart-header h3 {
-    font-size: 1rem;
+  .daily-chart-wrapper .chart-content {
+    min-height: 400px;
+    max-height: 450px;
   }
-}
-
-/* Desktop - Large */
-@media (min-width: 992px) {
-  .analytics-charts {
-    padding: 1.5rem;
+  .daily-chart-wrapper canvas {
+    max-height: 450px !important;
   }
   .header-controls h2 {
     font-size: 1.75rem;
-  }
-  .chart-content {
-    min-height: 350px;
   }
   .chart-controls select {
     padding: 0.5rem 1rem;
   }
 }
 
+/* Tablet - Medium */
+@media (min-width: 768px) and (max-width: 991.99px) {
+  .cards-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  .charts-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .chart-wrapper {
+    flex: 1 1 calc(50% - 0.5rem);
+    max-width: 600px;
+  }
+  .daily-chart-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  .chart-content {
+    min-height: 300px;
+    max-height: 350px;
+  }
+  .daily-chart-wrapper .chart-content {
+    min-height: 375px;
+    max-height: 400px;
+  }
+  .daily-chart-wrapper canvas {
+    max-height: 400px !important;
+  }
+  .chart-header h3 {
+    font-size: 1rem;
+  }
+}
+
 /* Mobile - Small Devices */
 @media (max-width: 575.98px) {
   .cards-row {
-    flex-direction: column;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
   }
   .sensor-card,
   .usage-card {
-    flex: 1 1 100%;
     padding: 0.75rem;
+    min-height: 120px;
   }
   .sensor-card h3,
   .usage-card h3 {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
   .sensor-card p,
   .usage-card p {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
+  }
+  .sensor-card .status {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
   }
   .header-controls {
     flex-direction: column;
@@ -1036,23 +1080,50 @@ canvas {
   }
   .chart-content {
     min-height: 300px;
+    max-height: 300px;
   }
-  .chart-content canvas {
-    min-height: 300px !important;
-    height: 300px !important;
-    width: 100% !important;
+  .daily-chart-wrapper .chart-content {
+    min-height: 350px;
+    max-height: 350px;
+  }
+  .daily-chart-wrapper canvas {
+    min-height: 350px !important;
+    max-height: 350px !important;
+    height: 350px !important;
   }
 }
 
-/* Extra small screens */
+/* Extra Small Screens */
 @media (max-width: 400px) {
+  .cards-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .sensor-card,
+  .usage-card {
+    padding: 0.65rem;
+    min-height: 110px;
+  }
+  .sensor-card h3,
+  .usage-card h3 {
+    font-size: 0.9rem;
+  }
+  .sensor-card p,
+  .usage-card p {
+    font-size: 0.7rem;
+  }
   .chart-content {
     min-height: 280px;
+    max-height: 280px;
   }
-  .chart-content canvas {
-    min-height: 280px !important;
-    height: 280px !important;
-    width: 100% !important;
+  .daily-chart-wrapper .chart-content {
+    min-height: 320px;
+    max-height: 320px;
+  }
+  .daily-chart-wrapper canvas {
+    min-height: 320px !important;
+    max-height: 320px !important;
+    height: 320px !important;
   }
   .chart-header h3 {
     font-size: 1rem;
@@ -1066,7 +1137,7 @@ canvas {
     margin: 0;
   }
   .toggle-container {
-    width: 40%;
+    width: 100%;
     text-align: center;
   }
 }

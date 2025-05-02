@@ -36,6 +36,12 @@ const routes = [
     meta: { requiresAuth: true }, // Require authentication
   },
   {
+    path: '/residentdashboard',
+    name: 'residentDashboard',
+    component: () => import('../views/ResidentDashboard.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/device/register',
     name: 'deviceRegistration',
     component: DeviceRegistrationView,
