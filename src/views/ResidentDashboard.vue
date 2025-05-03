@@ -11,8 +11,8 @@
     <div v-else>
       <!-- Top Header -->
       <div class="top-header">
-        <h2>Analytics Dashboard</h2>
-        <p class="realtime-date"> Current Date: {{ currentDate }}</p>
+        <h2>Analytics</h2>
+        <p class="realtime-date">  {{ currentDate }}</p>
       </div>
 
       <!-- Cards Row -->

@@ -381,54 +381,54 @@ export default {
       }
     },
     setActiveItem(item) {
-      this.activeItem = item;
-      this.$emit('menu-selected', item);
-      switch (item) {
-        case 'dashboard':
-          this.$router.push('/dashboard');
-          break;
-        case 'adminData':
-          this.$router.push('/admin/data');
-          break;
-        case 'adminRegistration':
-          this.$router.push('/admin/register');
-          break;
-        case 'residentsData':
-          this.$router.push('/admin/residents');
-          break;
-        case 'registerResidents':
-          this.$router.push('/resident/register1');
-          break;
-        case 'deviceRegistration':
-          this.$router.push('/device/register');
-          break;
-        case 'deviceList':
-          this.$router.push('/device/list');
-          break;
-        case 'deviceStatus':
-          this.$router.push('/device/status');
-          break;
-        case 'usageReports':
-          this.$router.push('/reports/usage');
-          break;
-        case 'billing':
-          this.$router.push('/reports/billing');
-          break;
-        case 'alerts':
-          this.$router.push('/reports/alerts');
-          break;
-        case 'residentData':
-          this.$router.push('/reports/residents');
-          break;
-        case 'settings':
-          this.$router.push('/settings');
-          break;
-        case 'help':
-          this.$router.push('/help');
-          break;
-      }
-      this.closeMobileSubmenu();
-    },
+  this.activeItem = item;
+  this.$emit('menu-selected', item);
+  switch (item) {
+    case 'dashboard':
+      this.$router.push(this.userRole === 'resident' ? '/residentdashboard' : '/dashboard');
+      break;
+    case 'adminData':
+      this.$router.push('/admin/data');
+      break;
+    case 'adminRegistration':
+      this.$router.push('/admin/register');
+      break;
+    case 'residentsData':
+      this.$router.push('/admin/residents');
+      break;
+    case 'registerResidents':
+      this.$router.push('/resident/register1');
+      break;
+    case 'deviceRegistration':
+      this.$router.push('/device/register');
+      break;
+    case 'deviceList':
+      this.$router.push('/device/list');
+      break;
+    case 'deviceStatus':
+      this.$router.push('/device/status');
+      break;
+    case 'usageReports':
+      this.$router.push('/reports/usage');
+      break;
+    case 'billing':
+      this.$router.push('/reports/billing');
+      break;
+    case 'alerts':
+      this.$router.push('/reports/alerts');
+      break;
+    case 'residentData':
+      this.$router.push('/reports/residents');
+      break;
+    case 'settings':
+      this.$router.push('/settings');
+      break;
+    case 'help':
+      this.$router.push('/help');
+      break;
+  }
+  this.closeMobileSubmenu();
+},
     async logout() {
       try {
         const auth = getAuth();
@@ -509,6 +509,8 @@ export default {
     } else if (path.includes('/admin/register')) {
       this.activeItem = 'adminRegistration';
       this.expandedSubmenu = 'userManagement';
+    } else if (path.includes('/residentdashboard')) {
+      this.activeItem = 'dashboard';
     } else if (path.includes('/dashboard')) {
       this.activeItem = 'dashboard';
     }
@@ -521,7 +523,6 @@ export default {
   }
 };
 </script>
-
 
 <style scoped>
 /* Import Poppins Font */

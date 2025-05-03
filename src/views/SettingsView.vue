@@ -1,3 +1,4 @@
+```vue
 <template>
   <div class="settings-container">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -149,17 +150,21 @@
               <p class="form-note">Usage above this quota incurs a surcharge.</p>
             </div>
 
-            <!-- Billing Calculation Date (Admin Only) -->
+            <!-- Billing Calculation Day (Admin Only) -->
             <div v-if="isAdmin" class="form-group">
-              <label for="billingCalculationDate">Billing Calculation Date</label>
+              <label for="billingCalculationDate">Billing Calculation Day</label>
               <input
-                type="date"
+                type="number"
                 id="billingCalculationDate"
-                v-model="billingCalculationDate"
+                v-model.number="billingCalculationDate"
+                min="1"
+                max="31"
                 required
-                aria-label="Set billing calculation date"
+                placeholder="e.g., 15"
+                aria-label="Set billing calculation day of the month"
+                @blur="validateBillingDay"
               />
-              <p class="form-note">Date when the bill is calculated each month.</p>
+              <p class="form-note">Day of the month when the bill is calculated (1-31).</p>
             </div>
 
             <!-- Daily Threshold Settings -->
@@ -266,7 +271,7 @@ export default {
     const billingRate = ref(100.00); // ₱ per m³
     const pricePerCubicMeterAboveQuota = ref(50.00); // ₱ per m³ above quota
     const monthlyQuotaCubicMeters = ref(10.0); // cubic meters
-    const billingCalculationDate = ref(''); // YYYY-MM-DD format
+    const billingCalculationDate = ref(''); // Day of month (1-31)
     const dailyThresholdCubicMeters = ref(0.1); // cubic meters
     const notifyOnThreshold = ref(false);
     const themeMode = ref('system'); // Theme: light, dark, system
@@ -319,13 +324,26 @@ export default {
           billingRate.value = settingsData.billingRate || 100.00;
           pricePerCubicMeterAboveQuota.value = settingsData.pricePerCubicMeterAboveQuota || 50.00;
           monthlyQuotaCubicMeters.value = settingsData.monthlyQuotaCubicMeters || 10.0;
-          billingCalculationDate.value = settingsData.billingCalculationDate || '';
+          billingCalculationDate.value = settingsData.billingCalculationDate || ''; // Now a number (1-31)
         }
       } catch (err) {
         error.value = 'Failed to load settings. Please try again.';
         console.error('Fetch data error:', err.message);
       } finally {
         loading.value = false;
+      }
+    };
+
+    // Validate billing calculation day
+    const validateBillingDay = () => {
+      if (
+        billingCalculationDate.value < 1 ||
+        billingCalculationDate.value > 31 ||
+        !Number.isInteger(Number(billingCalculationDate.value))
+      ) {
+        error.value = 'Please enter a valid day between 1 and 31.';
+        billingCalculationDate.value = ''; // Reset invalid input
+        setTimeout(() => (error.value = null), 3000);
       }
     };
 
@@ -339,15 +357,17 @@ export default {
 
         // Validate numeric inputs
         if (
-          (isAdmin.value && (
-            billingRate.value < 0 ||
-            pricePerCubicMeterAboveQuota.value < 0 ||
-            monthlyQuotaCubicMeters.value < 0 ||
-            !billingCalculationDate.value
-          )) ||
+          (isAdmin.value &&
+            (billingRate.value < 0 ||
+              pricePerCubicMeterAboveQuota.value < 0 ||
+              monthlyQuotaCubicMeters.value < 0 ||
+              billingCalculationDate.value < 1 ||
+              billingCalculationDate.value > 31 ||
+              !Number.isInteger(Number(billingCalculationDate.value)))) ||
           dailyThresholdCubicMeters.value < 0
         ) {
-          error.value = 'Please enter valid non-negative numbers and a billing date.';
+          error.value =
+            'Please enter valid non-negative numbers and a billing day between 1 and 31.';
           return;
         }
 
@@ -359,18 +379,22 @@ export default {
             monthlyQuotaCubicMeters: monthlyQuotaCubicMeters.value,
             billingCalculationDate: billingCalculationDate.value,
           });
-          await setDoc(doc(db, 'Settings', 'global'), {
-            billingRate: billingRate.value,
-            pricePerCubicMeterAboveQuota: pricePerCubicMeterAboveQuota.value,
-            monthlyQuotaCubicMeters: monthlyQuotaCubicMeters.value,
-            billingCalculationDate: billingCalculationDate.value,
-          }, { merge: true });
+          await setDoc(
+            doc(db, 'Settings', 'global'),
+            {
+              billingRate: billingRate.value,
+              pricePerCubicMeterAboveQuota: pricePerCubicMeterAboveQuota.value,
+              monthlyQuotaCubicMeters: monthlyQuotaCubicMeters.value,
+              billingCalculationDate: billingCalculationDate.value,
+            },
+            { merge: true }
+          );
         }
 
         // Save threshold settings
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         const userData = userDoc.exists() ? userDoc.data() : { role: 'resident' };
-        const thresholdId = isAdmin.value ? 'admin' : (userData.deviceId || '');
+        const thresholdId = isAdmin.value ? 'admin' : userData.deviceId || '';
         console.log('Saving threshold settings:', {
           dailyThresholdCubicMeters: dailyThresholdCubicMeters.value,
           notifyOnThreshold: notifyOnThreshold.value,
@@ -516,6 +540,7 @@ export default {
       saveProfile,
       changePassword,
       logout,
+      validateBillingDay,
     };
   },
 };
@@ -678,17 +703,16 @@ export default {
   color: var(--text-light);
 }
 
-/* Style for date input to match other inputs */
-.form-group input[type="date"] {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
+/* Style for number input to match other inputs */
+.form-group input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
-.form-group input[type="date"]::-webkit-calendar-picker-indicator {
-  opacity: 0.7;
-  cursor: pointer;
-  padding: 0.5rem;
+.form-group input[type="number"]::-webkit-inner-spin-button,
+.form-group input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .form-note {
@@ -841,3 +865,4 @@ export default {
   }
 }
 </style>
+```
