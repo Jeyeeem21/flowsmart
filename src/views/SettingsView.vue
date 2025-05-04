@@ -1,4 +1,3 @@
-```vue
 <template>
   <div class="settings-container">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -54,6 +53,17 @@
                 v-model="profile.contactNumber"
                 placeholder="Enter your contact number"
                 aria-label="Edit contact number"
+              />
+            </div>
+            <!-- Address field for residents -->
+            <div v-if="!isAdmin" class="form-group">
+              <label for="address">Address</label>
+              <input
+                type="text"
+                id="address"
+                v-model="profile.address"
+                placeholder="Enter your address"
+                aria-label="Edit address"
               />
             </div>
             <div class="form-group readonly">
@@ -167,6 +177,23 @@
               <p class="form-note">Day of the month when the bill is calculated (1-31).</p>
             </div>
 
+            <!-- Due Date Days (Admin Only) -->
+            <div v-if="isAdmin" class="form-group">
+              <label for="dueDateDays">Due Date Days</label>
+              <input
+                type="number"
+                id="dueDateDays"
+                v-model.number="dueDateDays"
+                min="1"
+                max="10"
+                required
+                placeholder="e.g., 5"
+                aria-label="Set due date days after billing"
+                @blur="validateDueDate"
+              />
+              <p class="form-note">Number of days after billing calculation when payment is due (1-10).</p>
+            </div>
+
             <!-- Daily Threshold Settings -->
             <div class="form-group">
               <label for="dailyThresholdCubicMeters">Daily Threshold (Cubic Meters)</label>
@@ -272,6 +299,7 @@ export default {
     const pricePerCubicMeterAboveQuota = ref(50.00); // ₱ per m³ above quota
     const monthlyQuotaCubicMeters = ref(10.0); // cubic meters
     const billingCalculationDate = ref(''); // Day of month (1-31)
+    const dueDateDays = ref(''); // Due date days (1-10)
     const dailyThresholdCubicMeters = ref(0.1); // cubic meters
     const notifyOnThreshold = ref(false);
     const themeMode = ref('system'); // Theme: light, dark, system
@@ -279,6 +307,7 @@ export default {
       fullName: '',
       email: '',
       contactNumber: '',
+      address: '',
       deviceId: null,
       accountNumber: '',
     });
@@ -301,6 +330,7 @@ export default {
             fullName: userData.fullName || '',
             email: userData.email || user.email,
             contactNumber: userData.contactNumber || '',
+            address: userData.address || '',
             deviceId: userData.deviceId || null,
             accountNumber: userData.accountNumber || '',
           };
@@ -324,7 +354,8 @@ export default {
           billingRate.value = settingsData.billingRate || 100.00;
           pricePerCubicMeterAboveQuota.value = settingsData.pricePerCubicMeterAboveQuota || 50.00;
           monthlyQuotaCubicMeters.value = settingsData.monthlyQuotaCubicMeters || 10.0;
-          billingCalculationDate.value = settingsData.billingCalculationDate || ''; // Now a number (1-31)
+          billingCalculationDate.value = settingsData.billingCalculationDate || '';
+          dueDateDays.value = settingsData.dueDateDays || '';
         }
       } catch (err) {
         error.value = 'Failed to load settings. Please try again.';
@@ -347,6 +378,19 @@ export default {
       }
     };
 
+    // Validate due date days
+    const validateDueDate = () => {
+      if (
+        dueDateDays.value < 1 ||
+        dueDateDays.value > 10 ||
+        !Number.isInteger(Number(dueDateDays.value))
+      ) {
+        error.value = 'Please enter a valid number of days between 1 and 10.';
+        dueDateDays.value = ''; // Reset invalid input
+        setTimeout(() => (error.value = null), 3000);
+      }
+    };
+
     // Save usage and threshold settings
     const saveUsageSettings = async () => {
       saving.value = true;
@@ -363,11 +407,14 @@ export default {
               monthlyQuotaCubicMeters.value < 0 ||
               billingCalculationDate.value < 1 ||
               billingCalculationDate.value > 31 ||
-              !Number.isInteger(Number(billingCalculationDate.value)))) ||
+              !Number.isInteger(Number(billingCalculationDate.value)) ||
+              dueDateDays.value < 1 ||
+              dueDateDays.value > 10 ||
+              !Number.isInteger(Number(dueDateDays.value)))) ||
           dailyThresholdCubicMeters.value < 0
         ) {
           error.value =
-            'Please enter valid non-negative numbers and a billing day between 1 and 31.';
+            'Please enter valid non-negative numbers, a billing day between 1 and 31, and due date days between 1 and 10.';
           return;
         }
 
@@ -378,6 +425,7 @@ export default {
             pricePerCubicMeterAboveQuota: pricePerCubicMeterAboveQuota.value,
             monthlyQuotaCubicMeters: monthlyQuotaCubicMeters.value,
             billingCalculationDate: billingCalculationDate.value,
+            dueDateDays: dueDateDays.value,
           });
           await setDoc(
             doc(db, 'Settings', 'global'),
@@ -386,6 +434,7 @@ export default {
               pricePerCubicMeterAboveQuota: pricePerCubicMeterAboveQuota.value,
               monthlyQuotaCubicMeters: monthlyQuotaCubicMeters.value,
               billingCalculationDate: billingCalculationDate.value,
+              dueDateDays: dueDateDays.value,
             },
             { merge: true }
           );
@@ -469,6 +518,7 @@ export default {
           fullName: profile.value.fullName,
           email: profile.value.email,
           contactNumber: profile.value.contactNumber,
+          address: profile.value.address,
         });
 
         error.value = 'Profile saved successfully!';
@@ -531,6 +581,7 @@ export default {
       pricePerCubicMeterAboveQuota,
       monthlyQuotaCubicMeters,
       billingCalculationDate,
+      dueDateDays,
       dailyThresholdCubicMeters,
       notifyOnThreshold,
       themeMode,
@@ -541,6 +592,7 @@ export default {
       changePassword,
       logout,
       validateBillingDay,
+      validateDueDate,
     };
   },
 };
@@ -551,8 +603,8 @@ export default {
 
 :root {
   --primary-color: #388e3c;
-  --button-color: #28a745;
-  --button-hover-color: #4caf50;
+  --button-color: #4caf50;
+  --button-hover-color: #45a049;
   --secondary-color: #2c3e50;
   --background-light: #f9f9f9;
   --border-color: #d1d5db;
@@ -583,7 +635,7 @@ export default {
   color: var(--secondary-color);
   margin-bottom: 2rem;
   font-weight: 600;
-  text-align: center;
+
 }
 
 .error-message {
@@ -741,12 +793,12 @@ export default {
 
 .save-button,
 .action-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.50rem 1rem;
   border: none;
   background-color: var(--button-color);
-  color: #ffffff;
-  font-size: 0.95rem;
-  font-weight: 600;
+  color: #4caf50;
+  font-size: 0.80rem;
+  font-weight: 200;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
@@ -865,4 +917,3 @@ export default {
   }
 }
 </style>
-```
