@@ -14,6 +14,7 @@
                 v-model="device.deviceId" 
                 required
                 class="form-select"
+                @change="updateInitialReading"
               >
                 <option value="" disabled>Select a device ID</option>
                 <option v-for="device in availableDevices" :key="device.id" :value="device.id">
@@ -59,16 +60,19 @@
               />
             </div>
             <div class="form-group">
-              <label for="initialReading">Initial Reading (cubic)</label>
+              <label for="initialReading">Initial Reading (cubic meters)</label>
               <input 
                 type="number" 
                 id="initialReading" 
-                v-model="device.initialReading" 
+                v-model.number="device.initialReading" 
                 placeholder="0.00"
-                step="0.01"
+                step="0.001"
                 min="0"
                 required
               />
+              <div class="form-hint" v-if="device.deviceId">
+                Auto-calculated from SensorData ({{ totalLiters }} liters)
+              </div>
             </div>
             <div class="form-group">
               <label for="notes">Installation Notes</label>
@@ -94,7 +98,12 @@
                 @change="handleResidentChange"
               >
                 <option value="" disabled>Select a resident</option>
-                <option v-for="resident in residents" :key="resident.id" :value="resident.id">
+                <option 
+                  v-for="resident in residents" 
+                  :key="resident.id" 
+                  :value="resident.id"
+                  :style="{ color: resident.hasDevice ? '#4caf50' : '#2c3e50' }"
+                >
                   {{ resident.fullName }}
                 </option>
               </select>
@@ -104,6 +113,9 @@
               </div>
               <div class="form-error" v-if="residentError">
                 {{ residentError }}
+              </div>
+              <div class="form-hint">
+                Green names indicate residents who already own a device
               </div>
             </div>
             <div class="form-group">
@@ -170,13 +182,15 @@
       <h4>Debug Information</h4>
       <p>Available Device IDs: {{ availableDevices.map(d => d.id).join(', ') || 'None' }}</p>
       <p>Device Error: {{ deviceError || 'None' }}</p>
+      <p>Total Liters: {{ totalLiters || 'N/A' }}</p>
+      <p>Residents: {{ residents.map(r => `${r.fullName} (hasDevice: ${r.hasDevice})`).join(', ') || 'None' }}</p>
       <button @click="showDebug = false" class="btn-secondary">Hide Debug</button>
     </div>
   </div>
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 export default {
   name: 'DeviceRegistration',
@@ -185,7 +199,7 @@ export default {
       device: {
         deviceId: '',
         address: '',
-        installDate: new Date().toISOString().split('T')[0], // Today's date
+        installDate: new Date().toISOString().split('T')[0],
         initialReading: 0,
         notes: '',
         residentName: '',
@@ -194,7 +208,7 @@ export default {
         accountNumber: '',
         residentId: ''
       },
-      availableDevices: [], // Changed from availableDeviceIds to availableDevices to store full device info
+      availableDevices: [],
       residents: [],
       selectedResidentId: '',
       showSuccess: false,
@@ -204,14 +218,14 @@ export default {
       deviceError: null,
       residentError: null,
       isSubmitting: false,
-      showDebug: false // Set to true to show debug info
+      showDebug: false,
+      totalLiters: 0
     };
   },
   mounted() {
     this.fetchDeviceIds();
     this.fetchResidents();
     
-    // Add keyboard shortcut for debug mode (Ctrl+Shift+D)
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
         this.showDebug = !this.showDebug;
@@ -222,34 +236,36 @@ export default {
     async fetchDeviceIds() {
       this.isLoadingDevices = true;
       this.deviceError = null;
-      this.availableDevices = []; // Clear previous devices
+      this.availableDevices = [];
       
       try {
         const db = getFirestore();
         
-        // First, get all registered devices to exclude them
-        const registeredDevicesQuery = collection(db, 'devices');
-        const registeredDevicesSnapshot = await getDocs(registeredDevicesQuery);
-        const registeredDeviceIds = registeredDevicesSnapshot.docs.map(doc => doc.id);
+        // Get all registered devices
+        const devicesCollection = collection(db, 'devices');
+        const devicesSnapshot = await getDocs(devicesCollection);
         
-        console.log('Registered device IDs:', registeredDeviceIds);
+        // Filter devices with status 'unregistered'
+        const unregisteredDevices = devicesSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(device => device.status === 'unregistered');
         
-        // Then, get all device IDs from SensorData
+        // Get all device IDs from SensorData
         const sensorDataCollection = collection(db, 'SensorData');
         const sensorDataSnapshot = await getDocs(sensorDataCollection);
         
-        if (sensorDataSnapshot.empty) {
-          console.log('SensorData collection is empty');
+        if (sensorDataSnapshot.empty && unregisteredDevices.length === 0) {
+          console.log('No devices available');
           this.deviceError = "No device IDs found in the database";
           return;
         }
         
-        // Extract devices with their id field and filter out already registered ones
-        const allDevices = [];
+        // Extract devices from SensorData
+        const sensorDevices = [];
         sensorDataSnapshot.forEach(doc => {
           const data = doc.data();
-          if (data && data.id && !registeredDeviceIds.includes(data.id)) {
-            allDevices.push({
+          if (data && data.id) {
+            sensorDevices.push({
               id: data.id,
               liters: data.liters || 0,
               tds_ppm: data.tds_ppm || 0,
@@ -259,10 +275,19 @@ export default {
           }
         });
         
-        // Make device IDs distinct by using a Map with the device ID as the key
+        // Combine unregistered devices and SensorData devices, excluding registered devices
+        const registeredDeviceIds = devicesSnapshot.docs
+          .map(doc => doc.data().deviceId)
+          .filter(id => !unregisteredDevices.some(d => d.deviceId === id));
+        
+        const allDevices = [
+          ...unregisteredDevices,
+          ...sensorDevices.filter(device => !registeredDeviceIds.includes(device.id))
+        ];
+        
+        // Make device IDs distinct
         const distinctDevicesMap = new Map();
         allDevices.forEach(device => {
-          // If this device ID isn't in the map yet, or if this device has a more recent timestamp
           if (!distinctDevicesMap.has(device.id) || 
               (device.timestamp && distinctDevicesMap.get(device.id).timestamp && 
                new Date(device.timestamp) > new Date(distinctDevicesMap.get(device.id).timestamp))) {
@@ -270,13 +295,12 @@ export default {
           }
         });
         
-        // Convert the Map back to an array
         const availableDevices = Array.from(distinctDevicesMap.values());
         
         console.log('Available distinct devices:', availableDevices);
         
         if (availableDevices.length === 0) {
-          this.deviceError = "All devices are already registered";
+          this.deviceError = "No unregistered devices available";
         } else {
           this.availableDevices = availableDevices;
         }
@@ -288,61 +312,94 @@ export default {
       }
     },
     
+    async updateInitialReading() {
+      if (!this.device.deviceId) {
+        this.device.initialReading = 0;
+        this.totalLiters = 0;
+        return;
+      }
+      
+      try {
+        const db = getFirestore();
+        const sensorDataCollection = collection(db, 'SensorData');
+        const sensorDataSnapshot = await getDocs(sensorDataCollection);
+        
+        // Sum liters for the selected device ID
+        let totalLiters = 0;
+        sensorDataSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.id === this.device.deviceId && data.liters) {
+            totalLiters += parseFloat(data.liters);
+          }
+        });
+        
+        // Convert liters to cubic meters (1 cubic meter = 1000 liters)
+        this.totalLiters = totalLiters;
+        this.device.initialReading = (totalLiters / 1000).toFixed(3);
+      } catch (error) {
+        console.error('Error fetching sensor data for initial reading:', error);
+        this.deviceError = "Failed to load sensor data: " + error.message;
+        this.device.initialReading = 0;
+        this.totalLiters = 0;
+      }
+    },
+    
     async fetchResidents() {
-  this.isLoadingResidents = true;
-  this.residentError = null;
-
-  try {
-    const db = getFirestore();
-    const usersCollection = collection(db, 'users');
-    const snapshot = await getDocs(usersCollection);
-
-    // Filter users where role is "resident"
-    this.residents = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(user => user.role === "resident");
-
-    if (this.residents.length === 0) {
-      this.residentError = "No residents found in the database";
-    }
-  } catch (error) {
-    console.error('Error fetching residents:', error);
-    this.residentError = "Failed to load residents. Please try again.";
-  } finally {
-    this.isLoadingResidents = false;
-  }
-},
+      this.isLoadingResidents = true;
+      this.residentError = null;
+      
+      try {
+        const db = getFirestore();
+        const usersCollection = collection(db, 'users');
+        const snapshot = await getDocs(usersCollection);
+        
+        this.residents = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            hasDevice: !!doc.data().deviceId // Check if resident has a deviceId
+          }))
+          .filter(user => user.role === "resident");
+        
+        if (this.residents.length === 0) {
+          this.residentError = "No residents found in the database";
+        }
+      } catch (error) {
+        console.error('Error fetching residents:', error);
+        this.residentError = "Failed to load residents: " + error.message;
+      } finally {
+        this.isLoadingResidents = false;
+      }
+    },
     
     async handleResidentChange() {
-  if (!this.selectedResidentId) {
-    return;
-  }
-
-  try {
-    const db = getFirestore();
-    const residentDoc = await getDoc(doc(db, 'users', this.selectedResidentId));
-
-    if (residentDoc.exists()) {
-      const residentData = residentDoc.data();
-
-      // Update the form with resident data
-      this.device.residentName = residentData.fullName || '';
-      this.device.residentContact = residentData.contactNumber || '';
-      this.device.residentEmail = residentData.email || '';
-      this.device.address = residentData.address || this.device.address;
-      this.device.residentId = this.selectedResidentId;
-
-      // Generate account number if not already present
-      if (!residentData.accountNumber) {
-        this.device.accountNumber = `ACCT-${Math.floor(100000 + Math.random() * 900000)}`;
-      } else {
-        this.device.accountNumber = residentData.accountNumber;
+      if (!this.selectedResidentId) {
+        return;
       }
-    }
-  } catch (error) {
-    console.error('Error fetching resident details:', error);
-  }
-},
+      
+      try {
+        const db = getFirestore();
+        const residentDoc = await getDoc(doc(db, 'users', this.selectedResidentId));
+        
+        if (residentDoc.exists()) {
+          const residentData = residentDoc.data();
+          
+          this.device.residentName = residentData.fullName || '';
+          this.device.residentContact = residentData.contactNumber || '';
+          this.device.residentEmail = residentData.email || '';
+          this.device.address = residentData.address || this.device.address;
+          this.device.residentId = this.selectedResidentId;
+          
+          if (!residentData.accountNumber) {
+            this.device.accountNumber = `ACCT-${Math.floor(100000 + Math.random() * 900000)}`;
+          } else {
+            this.device.accountNumber = residentData.accountNumber;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching resident details:', error);
+      }
+    },
     
     async registerDevice() {
       if (!this.device.deviceId || !this.selectedResidentId) {
@@ -354,7 +411,6 @@ export default {
       try {
         const db = getFirestore();
         
-        // Create a new device document
         const deviceData = {
           deviceId: this.device.deviceId,
           address: this.device.address,
@@ -368,25 +424,16 @@ export default {
           status: 'active'
         };
         
-        // Add to devices collection - use the device.deviceId as the document ID
         await setDoc(doc(db, 'devices', this.device.deviceId), deviceData);
         
-        // Update resident with device information if needed
-       await updateDoc(doc(db, 'users', this.selectedResidentId), {
-  deviceId: this.device.deviceId,
-  accountNumber: this.device.accountNumber,
-});
+        await updateDoc(doc(db, 'users', this.selectedResidentId), {
+          deviceId: this.device.deviceId,
+          accountNumber: this.device.accountNumber
+        });
         
-        // Store the registered device for the success message
         this.lastRegisteredDevice = { ...this.device };
-        
-        // Show success message
         this.showSuccess = true;
-        
-        // Reset the form
         this.resetForm();
-        
-        // Refresh available device IDs
         this.fetchDeviceIds();
       } catch (error) {
         console.error('Error registering device:', error);
@@ -397,7 +444,6 @@ export default {
     },
     
     resetForm() {
-      // Reset form fields
       this.device = {
         deviceId: '',
         address: '',
@@ -412,6 +458,7 @@ export default {
       };
       
       this.selectedResidentId = '';
+      this.totalLiters = 0;
     }
   }
 };

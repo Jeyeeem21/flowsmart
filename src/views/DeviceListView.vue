@@ -62,7 +62,7 @@
     <div class="empty-container" v-if="!isLoading && !error && filteredDevices.length === 0">
       <div class="empty-message">
         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+          <rect x="2" y6="6" width="20" height="12" rx="2"></rect>
           <path d="M6 12h12"></path>
           <path d="M8 12v4"></path>
           <path d="M16 12v4"></path>
@@ -73,49 +73,75 @@
       </div>
     </div>
     
-    <!-- Devices Table -->
-    <div class="devices-table-container" v-if="!isLoading && !error && filteredDevices.length > 0">
-      <table class="devices-table">
-        <thead>
-          <tr>
-            <th>Device ID</th>
-            <th>Resident</th>
-            <th>Address</th>
-            <th>Installation Date</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="device in filteredDevices" :key="device.deviceId">
-            <td>{{ device.deviceId }}</td>
-            <td>{{ device.residentName }}</td>
-            <td>{{ device.address }}</td>
-            <td>{{ formatDate(device.installDate) }}</td>
-            <td>
-              <span class="status-badge" :class="getStatusClass(device.status)">
-                {{ device.status }}
-              </span>
-            </td>
-            <td>
-              <div class="action-buttons">
-                <button class="btn-view" @click="viewDevice(device)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-                <button class="btn-edit" @click="editDevice(device)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Devices List (Mobile Card View / Desktop Table) -->
+    <div class="devices-container" v-if="!isLoading && !error && filteredDevices.length > 0">
+      <!-- Mobile Card View -->
+      <div class="devices-card-view" v-if="isMobile">
+        <div class="device-card" v-for="device in filteredDevices" :key="device.deviceId">
+          <div class="device-card-header">
+            <span class="device-id">{{ device.deviceId }}</span>
+            <span class="status-badge" :class="getStatusClass(device.status)">
+              {{ device.status }}
+            </span>
+          </div>
+          <div class="device-card-body">
+            <p><strong>Resident:</strong> {{ device.residentName }}</p>
+            <p><strong>Address:</strong> {{ device.address }}</p>
+            <p><strong>Install Date:</strong> {{ formatDate(device.installDate) }}</p>
+          </div>
+          <div class="device-card-actions">
+            <button class="btn-view" @click="viewDevice(device)">View</button>
+            <button class="btn-unassign" @click="unassignDevice(device)" v-if="device.status !== 'unregistered'">Unassign</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Desktop Table View -->
+      <div class="devices-table-container" v-else>
+        <table class="devices-table">
+          <thead>
+            <tr>
+              <th>Device ID</th>
+              <th>Resident</th>
+              <th>Address</th>
+              <th>Installation Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="device in filteredDevices" :key="device.deviceId">
+              <td>{{ device.deviceId }}</td>
+              <td>{{ device.residentName }}</td>
+              <td>{{ device.address }}</td>
+              <td>{{ formatDate(device.installDate) }}</td>
+              <td>
+                <span class="status-badge" :class="getStatusClass(device.status)">
+                  {{ device.status }}
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons">
+                  <button class="btn-view" @click="viewDevice(device)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button class="btn-unassign" @click="unassignDevice(device)" v-if="device.status !== 'unregistered'">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="8.5" cy="7" r="4"></circle>
+                      <line x1="18" y1="8" x2="23" y2="13"></line>
+                      <line x1="23" y1="8" x2="18" y2="13"></line>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     
     <!-- Device Details Modal -->
@@ -148,7 +174,7 @@
               </div>
               <div class="detail-row">
                 <span class="detail-label">Initial Reading:</span>
-                <span class="detail-value">{{ selectedDevice.initialReading }} cubic</span>
+                <span class="detail-value">{{ selectedDevice.initialReading || 'N/A' }} cubic</span>
               </div>
             </div>
             
@@ -156,7 +182,7 @@
               <h3>Installation Information</h3>
               <div class="detail-row">
                 <span class="detail-label">Address:</span>
-                <span class="detail-value">{{ selectedDevice.address }}</span>
+                <span class="detail-value">{{ selectedDevice.address || 'N/A' }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Installation Date:</span>
@@ -176,11 +202,11 @@
               <h3>Resident Information</h3>
               <div class="detail-row">
                 <span class="detail-label">Name:</span>
-                <span class="detail-value">{{ selectedDevice.residentName }}</span>
+                <span class="detail-value">{{ selectedDevice.residentName || 'Not assigned' }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Account Number:</span>
-                <span class="detail-value">{{ selectedDevice.accountNumber }}</span>
+                <span class="detail-value">{{ selectedDevice.accountNumber || 'N/A' }}</span>
               </div>
             </div>
           </div>
@@ -191,7 +217,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
 
 export default {
@@ -209,11 +235,16 @@ export default {
       error: null,
       showViewModal: false,
       selectedDevice: {},
-      sensorData: {} // To store sensor data for unregistered devices
+      sensorData: {},
+      isMobile: window.innerWidth <= 768
     };
   },
   mounted() {
     this.loadDevices();
+    window.addEventListener('resize', this.handleResize);
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.handleResize);
   },
   methods: {
     async loadDevices() {
@@ -223,37 +254,27 @@ export default {
       try {
         const db = getFirestore();
         
-        // First, load all sensor data to get device IDs
+        // Load sensor data
         const sensorDataCollection = collection(db, 'SensorData');
         const sensorSnapshot = await getDocs(sensorDataCollection);
         
-        // Create a map of sensor data by device ID
         this.sensorData = {};
         sensorSnapshot.forEach(doc => {
           const data = doc.data();
           if (data && data.id) {
-            this.sensorData[data.id] = {
-              ...data,
-              docId: doc.id
-            };
+            this.sensorData[data.id] = { ...data, docId: doc.id };
           }
         });
         
-        console.log('Sensor data:', this.sensorData);
-        
-        // Then, get all registered devices
+        // Load registered devices
         const devicesCollection = collection(db, 'devices');
         const devicesSnapshot = await getDocs(devicesCollection);
         
-        // Get registered devices
         const registeredDevices = devicesSnapshot.docs.map(doc => ({
           ...doc.data(),
           id: doc.id
         }));
         
-        console.log('Registered devices:', registeredDevices);
-        
-        // Create a list of all devices (registered + unregistered)
         const allDevices = [];
         
         // Add registered devices
@@ -263,7 +284,6 @@ export default {
         
         // Add unregistered devices from sensor data
         Object.keys(this.sensorData).forEach(deviceId => {
-          // Check if this device is not already registered
           if (!registeredDevices.some(d => d.deviceId === deviceId)) {
             allDevices.push({
               deviceId: deviceId,
@@ -272,7 +292,6 @@ export default {
               address: 'Not assigned',
               installDate: null,
               registrationDate: null,
-              // Add sensor data
               sensorData: this.sensorData[deviceId]
             });
           }
@@ -280,8 +299,6 @@ export default {
         
         this.devices = allDevices;
         this.filteredDevices = [...allDevices];
-        
-        console.log('All devices:', allDevices);
       } catch (error) {
         console.error('Error loading devices:', error);
         this.error = 'Failed to load devices: ' + error.message;
@@ -325,18 +342,12 @@ export default {
       if (!status) return '';
       
       switch (status.toLowerCase()) {
-        case 'active':
-          return 'status-active';
-        case 'inactive':
-          return 'status-inactive';
-        case 'maintenance':
-          return 'status-maintenance';
-        case 'error':
-          return 'status-error';
-        case 'unregistered':
-          return 'status-unregistered';
-        default:
-          return '';
+        case 'active': return 'status-active';
+        case 'inactive': return 'status-inactive';
+        case 'maintenance': return 'status-maintenance';
+        case 'error': return 'status-error';
+        case 'unregistered': return 'status-unregistered';
+        default: return '';
       }
     },
     
@@ -345,13 +356,61 @@ export default {
       this.showViewModal = true;
     },
     
-    editDevice(device) {
-      // Navigate to edit page with device ID
-      this.router.push(`/device/edit/${device.deviceId}`);
-    },
-    
     navigateToRegister() {
       this.router.push('/device/register');
+    },
+    
+    async unassignDevice(device) {
+      if (confirm(`Are you sure you want to unassign device ${device.deviceId}?`)) {
+        try {
+          this.isLoading = true;
+          const db = getFirestore();
+          const deviceRef = doc(db, 'devices', device.id);
+          
+          // Update device to unassigned state
+          await updateDoc(deviceRef, {
+            residentName: 'Not assigned',
+            accountNumber: '',
+            address: 'Not assigned',
+            status: 'unregistered',
+            residentId: '',
+            registrationDate: null
+          });
+          
+          // Update resident to remove device assignment
+          if (device.residentId) {
+            const residentRef = doc(db, 'users', device.residentId);
+            await updateDoc(residentRef, {
+              deviceId: '',
+              accountNumber: ''
+            });
+          }
+          
+          // Update local data
+          const deviceIndex = this.devices.findIndex(d => d.id === device.id);
+          if (deviceIndex !== -1) {
+            this.devices[deviceIndex] = {
+              ...this.devices[deviceIndex],
+              residentName: 'Not assigned',
+              accountNumber: '',
+              address: 'Not assigned',
+              status: 'unregistered',
+              residentId: '',
+              registrationDate: null
+            };
+            this.filterDevices();
+          }
+        } catch (error) {
+          console.error('Error unassigning device:', error);
+          this.error = 'Failed to unassign device: ' + error.message;
+        } finally {
+          this.isLoading = false;
+        }
+      }
+    },
+    
+    handleResize() {
+      this.isMobile = window.innerWidth <= 768;
     }
   }
 };
@@ -360,11 +419,14 @@ export default {
 <style scoped>
 .device-list {
   padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 h1 {
   color: #2c3e50;
   margin-bottom: 25px;
+  font-size: 1.8rem;
 }
 
 .controls {
@@ -506,7 +568,52 @@ h1 {
   max-width: 400px;
 }
 
-/* Devices Table */
+/* Mobile Card View */
+.devices-card-view {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.device-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+}
+
+.device-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.device-id {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.device-card-body {
+  margin-bottom: 15px;
+}
+
+.device-card-body p {
+  margin: 5px 0;
+  color: #666;
+}
+
+.device-card-body strong {
+  color: #2c3e50;
+}
+
+.device-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Desktop Table View */
 .devices-table-container {
   overflow-x: auto;
   background-color: white;
@@ -581,7 +688,7 @@ h1 {
 }
 
 .btn-view,
-.btn-edit {
+.btn-unassign {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,6 +700,13 @@ h1 {
   transition: background-color 0.2s;
 }
 
+.device-card-actions .btn-view,
+.device-card-actions .btn-unassign {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
 .btn-view {
   background-color: #e3f2fd;
   color: #2196f3;
@@ -602,13 +716,13 @@ h1 {
   background-color: #bbdefb;
 }
 
-.btn-edit {
-  background-color: #e8f5e9;
-  color: #4caf50;
+.btn-unassign {
+  background-color: #f5f5f5;
+  color: #757575;
 }
 
-.btn-edit:hover {
-  background-color: #c8e6c9;
+.btn-unassign:hover {
+  background-color: #e0e0e0;
 }
 
 /* Modal Styles */
@@ -708,7 +822,7 @@ h1 {
   color: #666;
 }
 
-/* Responsive styles */
+/* Responsive Styles */
 @media (max-width: 768px) {
   .controls {
     flex-direction: column;
@@ -731,6 +845,11 @@ h1 {
   .detail-label {
     width: auto;
     margin-bottom: 5px;
+  }
+  
+  .modal-container {
+    width: 95%;
+    max-height: 95vh;
   }
 }
 </style>

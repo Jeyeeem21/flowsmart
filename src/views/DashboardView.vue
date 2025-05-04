@@ -176,9 +176,9 @@ export default {
       return 'status-safe';
     },
     currentTime() {
-      const date = new Date();
-      return date.toLocaleDateString();
-    }
+  const date = new Date();
+  return date.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
   },
   methods: {
     resetData() {
@@ -388,8 +388,8 @@ export default {
           datasets: [{
             label: `Daily ${this.unitLabel} Usage`,
             data: getValues(this.dailyChartData),
-            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-            borderColor: 'rgba(54, 162, 235, 1)',
+           backgroundColor: 'rgba(76, 175, 80, 0.5)', // Semi-transparent green fill
+        borderColor: 'rgba(76, 175, 80, 1)', // Solid green line
             fill: true,
             tension: 0.4
           }]
@@ -444,7 +444,8 @@ export default {
           datasets: [{
             label: `Monthly ${this.unitLabel} Usage`,
             data: getValues(this.monthlyChartData),
-            backgroundColor: 'rgba(75, 192, 192, 0.5)'
+           backgroundColor: 'rgba(76, 175, 80, 0.5)', // Semi-transparent green fill
+        borderColor: 'rgba(76, 175, 80, 1)', // Solid green line
           }]
         },
         options: {
@@ -491,7 +492,8 @@ export default {
           datasets: [{
             label: `Yearly ${this.unitLabel} Usage`,
             data: getValues(this.yearlyChartData),
-            backgroundColor: 'rgba(153, 102, 255, 0.5)'
+            backgroundColor: 'rgba(76, 175, 80, 0.8)', // Green bar fill
+        borderColor: 'rgba(76, 175, 80, 1)', // Solid green border
           }]
         },
         options: {
