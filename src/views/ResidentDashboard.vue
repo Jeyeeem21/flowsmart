@@ -1164,7 +1164,7 @@ canvas {
     height: 350px !important;
   }
   .unit-toggle {
-    width: 100%;
+    width: 40%;
     justify-content: space-between;
   }
   .toggle-button {

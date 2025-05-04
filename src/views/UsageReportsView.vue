@@ -208,6 +208,12 @@ export default {
 
     // Process data based on report type
     const processedData = computed(() => {
+      // Define month names
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
       if (reportType.value === 'daily') {
         const dailyMap = {};
         sensorData.value.forEach(data => {
@@ -215,7 +221,7 @@ export default {
           const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}_${data.deviceId}`;
           if (!dailyMap[key]) {
             dailyMap[key] = {
-              label: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
+              label: `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`,
               deviceId: data.deviceId,
               liters: 0,
               tds_ppm: 0,
@@ -237,7 +243,7 @@ export default {
             cubicMeters: item.liters / 1000,
             tds_ppm: item.tds_ppm / item.count,
             us_cm: item.us_cm / item.count,
-            timestamp: new Date(item.label),
+            timestamp: new Date(item.label.split(', ')[1], months.indexOf(item.label.split(' ')[0]), item.label.split(' ')[1].split(',')[0]),
           }))
           .sort((a, b) => b.timestamp - a.timestamp);
       } else if (reportType.value === 'monthly') {
@@ -247,7 +253,7 @@ export default {
           const key = `${date.getFullYear()}-${date.getMonth() + 1}_${data.deviceId}`;
           if (!monthlyMap[key]) {
             monthlyMap[key] = {
-              label: `${new Date(date.getFullYear(), date.getMonth()).toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`,
+              label: `${months[date.getMonth()]} ${date.getFullYear()}`,
               deviceId: data.deviceId,
               liters: 0,
               tds_ppm: 0,
@@ -351,12 +357,6 @@ export default {
     const setReportType = (type) => {
       reportType.value = type;
     };
-
-    // Months for monthly report
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
 
     // Lifecycle hooks
     onMounted(() => {

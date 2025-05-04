@@ -107,7 +107,7 @@ export default {
             router.push('/residentdashboard');
           } else {
             // Default redirect if role isn't specified
-            router.push('/userdashboard');
+            router.push('/login');
           }
         } else {
           // If user document doesn't exist, redirect to profile setup

@@ -8,8 +8,8 @@
 
     <!-- Top Header with Real-Time Date -->
     <div class="top-header">
-      <h2>Analytics Dashboard</h2>
-      <p class="realtime-date">Current Date: {{ currentTime }}</p>
+      <h2>Analytics</h2>
+      <p class="realtime-date"> {{ currentTime }}</p>
     </div>
 
     <!-- Cards Row -->

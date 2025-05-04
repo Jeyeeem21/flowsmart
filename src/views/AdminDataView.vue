@@ -80,17 +80,19 @@
             <th>Name</th>
             <th>Role</th>
             <th>Contact Number</th>
+            <th>Address</th>
             <th>Created</th>
-            <th>Actions</th>
+            <th class="actions-column">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="admin in filteredAdmins" :key="admin.id">
-            <td>{{ admin.fullName || 'Not provided' }}</td>
-            <td>{{ admin.role || 'Standard Admin' }}</td>
-            <td>{{ admin.contactNumber || 'Not provided' }}</td>
-            <td>{{ formatDate(admin.createdAt) }}</td>
-            <td>
+            <td data-label="Name">{{ admin.fullName || 'Not provided' }}</td>
+            <td data-label="Role">{{ admin.role || 'Standard Admin' }}</td>
+            <td data-label="Contact Number">{{ admin.contactNumber || 'Not provided' }}</td>
+            <td data-label="Address">{{ admin.address || 'Not provided' }}</td>
+            <td data-label="Created">{{ formatDate(admin.createdAt) }}</td>
+            <td class="actions-column">
               <div class="action-buttons">
                 <button class="btn-view" @click="viewAdmin(admin)">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -98,7 +100,7 @@
                     <circle cx="12" cy="12" r="3"></circle>
                   </svg>
                 </button>
-                <button class="btn-edit" @click="editAdmin(admin)">
+                <button class="btn-edit" @click="openEditModal(admin)">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -146,12 +148,87 @@
               <span class="detail-value">{{ selectedAdmin.contactNumber || 'Not provided' }}</span>
             </div>
             <div class="detail-row">
+              <span class="detail-label">Address:</span>
+              <span class="detail-value">{{ selectedAdmin.address || 'Not provided' }}</span>
+            </div>
+            <div class="detail-row">
               <span class="detail-label">Created:</span>
               <span class="detail-value">{{ formatDate(selectedAdmin.createdAt) }}</span>
             </div>
             <div class="detail-row" v-if="selectedAdmin.updatedAt">
               <span class="detail-label">Last Updated:</span>
               <span class="detail-value">{{ formatDate(selectedAdmin.updatedAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Edit Admin Modal -->
+    <div class="modal-overlay" v-if="showEditModal" @click="showEditModal = false">
+      <div class="modal-container" @click.stop>
+        <div class="modal-header">
+          <h2>Edit Admin</h2>
+          <button class="modal-close" @click="showEditModal = false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-content">
+          <div class="edit-form">
+            <div class="form-group">
+              <label for="fullName">Full Name</label>
+              <input 
+                id="fullName" 
+                v-model="editAdminData.fullName" 
+                type="text" 
+                placeholder="Enter full name" 
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label for="contactNumber">Contact Number</label>
+              <input 
+                id="contactNumber" 
+                v-model="editAdminData.contactNumber" 
+                type="tel" 
+                placeholder="Enter contact number" 
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label for="address">Address</label>
+              <textarea 
+                id="address" 
+                v-model="editAdminData.address" 
+                placeholder="Enter address" 
+                class="form-input"
+              ></textarea>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-cancel" @click="showEditModal = false">Cancel</button>
+              <button 
+                class="btn-save" 
+                @click="saveAdminChanges" 
+                :disabled="isSaving"
+              >
+                <span v-if="isSaving">
+                  <svg class="spinner" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                  </svg>
+                  Saving...
+                </span>
+                <span v-else>Save Changes</span>
+              </button>
             </div>
           </div>
         </div>
@@ -222,8 +299,8 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getFirestore, collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { getAuth, deleteUser } from 'firebase/auth';
 import { useRouter } from 'vue-router';
 
 export default {
@@ -240,9 +317,17 @@ export default {
       isLoading: true,
       error: null,
       showViewModal: false,
+      showEditModal: false,
       showDeleteModal: false,
       selectedAdmin: {},
+      editAdminData: {
+        id: '',
+        fullName: '',
+        contactNumber: '',
+        address: ''
+      },
       isDeleting: false,
+      isSaving: false,
       showToast: false,
       toastMessage: '',
       toastType: 'success'
@@ -250,26 +335,26 @@ export default {
   },
   methods: {
     async loadAdmins() {
-  this.isLoading = true;
-  this.error = null;
-  try {
-    const db = getFirestore();
-    const usersCollection = collection(db, 'users');
-    const usersSnapshot = await getDocs(usersCollection);
+      this.isLoading = true;
+      this.error = null;
+      try {
+        const db = getFirestore();
+        const usersCollection = collection(db, 'users');
+        const usersSnapshot = await getDocs(usersCollection);
 
-    // Filter users where role is "admin"
-    this.admins = usersSnapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(user => user.role === "admin");
+        // Filter users where role is "admin"
+        this.admins = usersSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(user => user.role === "admin");
 
-    this.filteredAdmins = [...this.admins];
-  } catch (error) {
-    console.error('Error loading admins:', error);
-    this.error = 'Failed to load admin data. Please try again.';
-  } finally {
-    this.isLoading = false;
-  }
-},
+        this.filteredAdmins = [...this.admins];
+      } catch (error) {
+        console.error('Error loading admins:', error);
+        this.error = 'Failed to load admin data. Please try again.';
+      } finally {
+        this.isLoading = false;
+      }
+    },
     
     filterAdmins() {
       if (!this.searchQuery.trim()) {
@@ -281,7 +366,8 @@ export default {
       this.filteredAdmins = this.admins.filter(admin => {
         return (
           (admin.fullName && admin.fullName.toLowerCase().includes(query)) ||
-          (admin.role && admin.role.toLowerCase().includes(query))
+          (admin.role && admin.role.toLowerCase().includes(query)) ||
+          (admin.address && admin.address.toLowerCase().includes(query))
         );
       });
     },
@@ -308,10 +394,51 @@ export default {
       this.showViewModal = true;
     },
     
-    editAdmin(admin) {
-      // Store the admin data in localStorage for the edit page
-      localStorage.setItem('editingAdmin', JSON.stringify(admin));
-      this.router.push(`/admin/edit/${admin.id}`);
+    openEditModal(admin) {
+      this.editAdminData = {
+        id: admin.id,
+        fullName: admin.fullName || '',
+        contactNumber: admin.contactNumber || '',
+        address: admin.address || ''
+      };
+      this.showEditModal = true;
+    },
+    
+    async saveAdminChanges() {
+      this.isSaving = true;
+      try {
+        const db = getFirestore();
+        const adminRef = doc(db, 'users', this.editAdminData.id);
+        
+        // Update Firestore with new data
+        await updateDoc(adminRef, {
+          fullName: this.editAdminData.fullName.trim() || null,
+          contactNumber: this.editAdminData.contactNumber.trim() || null,
+          address: this.editAdminData.address.trim() || null,
+          updatedAt: new Date().toISOString()
+        });
+        
+        // Update local arrays
+        this.admins = this.admins.map(admin =>
+          admin.id === this.editAdminData.id
+            ? { ...admin, ...this.editAdminData, updatedAt: new Date().toISOString() }
+            : admin
+        );
+        this.filteredAdmins = this.filteredAdmins.map(admin =>
+          admin.id === this.editAdminData.id
+            ? { ...admin, ...this.editAdminData, updatedAt: new Date().toISOString() }
+            : admin
+        );
+        
+        // Close modal and show success toast
+        this.showEditModal = false;
+        this.showToastMessage('Admin details updated successfully', 'success');
+      } catch (error) {
+        console.error('Error updating admin:', error);
+        this.showToastMessage('Failed to update admin details. Please try again.', 'error');
+      } finally {
+        this.isSaving = false;
+      }
     },
     
     confirmDelete(admin) {
@@ -324,7 +451,21 @@ export default {
       
       try {
         const db = getFirestore();
-        await deleteDoc(doc(db, 'admins', this.selectedAdmin.id));
+        const auth = getAuth();
+        
+        // Delete from Firestore
+        await deleteDoc(doc(db, 'users', this.selectedAdmin.id));
+        
+        // Attempt to delete from Authentication
+        try {
+          const user = auth.currentUser;
+          if (user && user.uid === this.selectedAdmin.id) {
+            await deleteUser(user);
+          }
+        } catch (authError) {
+          console.warn('Could not delete user from Authentication:', authError);
+          // Continue with Firestore deletion even if auth deletion fails
+        }
         
         // Remove from local arrays
         this.admins = this.admins.filter(admin => admin.id !== this.selectedAdmin.id);
@@ -365,35 +506,37 @@ export default {
 
 <style scoped>
 .admin-data {
-  padding: 20px;
+  padding: 16px;
+  position: relative;
 }
 
 h1 {
   color: #2c3e50;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
 }
 
 .admin-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 12px;
 }
 
 .search-container {
   position: relative;
+  flex: 1;
   max-width: 400px;
-  width: 100%;
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 40px 10px 15px;
+  padding: 12px 40px 12px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 1rem;
   transition: border-color 0.2s;
 }
 
@@ -416,17 +559,17 @@ h1 {
 }
 
 .btn-add {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 15px;
+  padding: 12px 16px;
   background-color: #4caf50;
   color: white;
   border: none;
   border-radius: 4px;
-  cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
+  cursor: pointer;
   transition: background-color 0.2s;
 }
 
@@ -443,15 +586,13 @@ h1 {
 }
 
 .loading-spinner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
+  text-align: center;
   color: #666;
 }
 
 .spinner {
   animation: spin 1s linear infinite;
+  margin-bottom: 10px;
 }
 
 @keyframes spin {
@@ -473,10 +614,14 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
-  color: #f44336;
+  color: #d32f2f;
   text-align: center;
   max-width: 400px;
+}
+
+.error-message svg {
+  margin-bottom: 10px;
+  color: #d32f2f;
 }
 
 .btn-retry {
@@ -486,8 +631,8 @@ h1 {
   border: 1px solid #ddd;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.9rem;
   transition: background-color 0.2s;
+  font-size: 0.9rem;
 }
 
 .btn-retry:hover {
@@ -503,13 +648,15 @@ h1 {
 }
 
 .empty-message {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-  color: #666;
   text-align: center;
+  color: #666;
   max-width: 400px;
+  font-size: 0.9rem;
+}
+
+.empty-message svg {
+  margin-bottom: 15px;
+  color: #ccc;
 }
 
 /* Admins Table */
@@ -517,12 +664,13 @@ h1 {
   overflow-x: auto;
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .admins-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 900px;
 }
 
 .admins-table th,
@@ -534,10 +682,16 @@ h1 {
 
 .admins-table th {
   background-color: #f9f9f9;
+  font-weight: 600;
   color: #2c3e50;
-  font-weight: 500;
-  white-space: nowrap;
 }
+
+.admins-table th:nth-child(1) { width: 20%; }
+.admins-table th:nth-child(2) { width: 15%; }
+.admins-table th:nth-child(3) { width: 15%; }
+.admins-table th:nth-child(4) { width: 25%; }
+.admins-table th:nth-child(5) { width: 15%; }
+.admins-table th.actions-column { width: 10%; }
 
 .admins-table tr:last-child td {
   border-bottom: none;
@@ -558,8 +712,8 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -576,12 +730,12 @@ h1 {
 }
 
 .btn-edit {
-  background-color: #e8f5e9;
+  background-color: #f0f8f0;
   color: #4caf50;
 }
 
 .btn-edit:hover {
-  background-color: #c8e6c9;
+  background-color: #e8f5e9;
 }
 
 .btn-delete {
@@ -612,6 +766,8 @@ h1 {
   border-radius: 8px;
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
@@ -624,9 +780,9 @@ h1 {
 }
 
 .modal-header h2 {
-  margin: 0;
+  font-size: 1.3rem;
   color: #2c3e50;
-  font-size: 1.2rem;
+  margin: 0;
 }
 
 .modal-close {
@@ -641,6 +797,7 @@ h1 {
   padding: 20px;
 }
 
+/* Admin Details */
 .admin-details {
   display: flex;
   flex-direction: column;
@@ -649,19 +806,78 @@ h1 {
 
 .detail-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .detail-label {
   font-weight: 500;
-  color: #2c3e50;
-  min-width: 120px;
+  color: #666;
+  width: 140px;
 }
 
 .detail-value {
-  color: #666;
+  color: #2c3e50;
   flex: 1;
+}
+
+/* Edit Form */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.form-input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #4caf50;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.form-input[type="textarea"] {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.btn-save {
+  padding: 10px 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.btn-save:hover {
+  background-color: #43a047;
+}
+
+.btn-save:disabled {
+  background-color: #a5d6a7;
+  cursor: not-allowed;
 }
 
 /* Delete Modal */
@@ -670,24 +886,24 @@ h1 {
 }
 
 .delete-warning {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
   text-align: center;
   margin-bottom: 20px;
 }
 
+.delete-warning svg {
+  margin-bottom: 15px;
+}
+
 .warning-text {
-  color: #f44336;
+  color: #d32f2f;
   font-weight: 500;
+  margin-top: 10px;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 15px;
-  margin-top: 20px;
+  gap: 10px;
 }
 
 .btn-cancel {
@@ -697,8 +913,8 @@ h1 {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.9rem;
   transition: background-color 0.2s;
+  font-size: 0.9rem;
 }
 
 .btn-cancel:hover {
@@ -712,20 +928,19 @@ h1 {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
   transition: background-color 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-size: 0.9rem;
 }
 
 .btn-confirm-delete:hover {
-  background-color: #e53935;
+  background-color: #d32f2f;
 }
 
 .btn-confirm-delete:disabled {
-  background-color: #ef9a9a;
+  background-color: #ffcdd2;
   cursor: not-allowed;
 }
 
@@ -743,61 +958,280 @@ h1 {
   gap: 10px;
   padding: 12px 20px;
   border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: slideIn 0.3s ease-out;
+  font-size: 0.9rem;
+  max-width: 300px;
 }
 
 .toast-success {
   background-color: #e8f5e9;
   color: #2e7d32;
-  border-left: 4px solid #4caf50;
 }
 
 .toast-error {
   background-color: #ffebee;
-  color: #c62828;
-  border-left: 4px solid #f44336;
+  color: #d32f2f;
 }
 
 @keyframes slideIn {
   from {
-    transform: translateX(100%);
+    transform: translateY(100%);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateY(0);
     opacity: 1;
   }
 }
 
-/* Responsive Styles */
+/* Mobile Styles */
 @media (max-width: 768px) {
+  .admin-data {
+    padding: 16px;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+  }
+
   .admin-controls {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
-  
+
   .search-container {
     max-width: none;
   }
-  
+
+  .search-input {
+    padding: 12px 40px 12px 12px;
+    font-size: 1rem;
+  }
+
+  .btn-search {
+    right: 10px;
+  }
+
   .btn-add {
     width: 100%;
     justify-content: center;
+    padding: 12px;
+    font-size: 1rem;
   }
-  
+
+  /* Table to Card Layout */
+  .admins-table-container {
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .admins-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .admins-table thead {
+    display: none;
+  }
+
+  .admins-table tbody {
+    display: block;
+  }
+
+  .admins-table tr {
+    display: block;
+    background-color: white;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #eee;
+  }
+
+  .admins-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: none;
+    font-size: 0.9rem;
+    white-space: normal;
+    max-width: none;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+
+  .admins-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #666;
+    width: 40%;
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  .admins-table td:not(.actions-column) {
+    padding-right: 0;
+  }
+
+  .admins-table td.actions-column {
+    display: block;
+    margin-top: 12px;
+  }
+
+  .admins-table td[data-label="Name"]::before { content: "Name"; }
+  .admins-table td[data-label="Role"]::before { content: "Role"; }
+  .admins-table td[data-label="Contact Number"]::before { content: "Contact"; }
+  .admins-table td[data-label="Address"]::before { content: "Address"; }
+  .admins-table td[data-label="Created"]::before { content: "Created"; }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .btn-view,
+  .btn-edit,
+  .btn-delete {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    touch-action: manipulation;
+  }
+
+  .btn-view svg,
+  .btn-edit svg,
+  .btn-delete svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Modal Adjustments */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
   .modal-container {
-    width: 95%;
-    margin: 0 10px;
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 8px;
+    margin-top: 10vh;
   }
-  
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .modal-content {
+    padding: 20px;
+  }
+
   .detail-row {
     flex-direction: column;
-    gap: 5px;
+    align-items: flex-start;
+    gap: 8px;
   }
-  
+
   .detail-label {
-    min-width: auto;
+    width: auto;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .detail-value {
+    font-size: 0.95rem;
+    width: 100%;
+  }
+
+  .edit-form {
+    gap: 16px;
+  }
+
+  .form-group label {
+    font-size: 0.95rem;
+  }
+
+  .form-input {
+    font-size: 0.95rem;
+  }
+
+  .delete-modal {
+    max-width: none;
+  }
+
+  .delete-warning {
+    padding: 0;
+  }
+
+  .delete-warning p {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .warning-text {
+    font-size: 0.9rem;
+  }
+
+  .modal-actions {
+    flex-direction: row;
+    gap: 12px;
+    padding: 0 0 20px;
+  }
+
+  .btn-cancel,
+  .btn-confirm-delete,
+  .btn-save {
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    flex: 1;
+  }
+
+  /* Toast Adjustments */
+  .toast-container {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .toast-message {
+    max-width: 90%;
+    font-size: 0.95rem;
+    padding: 12px 20px;
+  }
+
+  /* Loading and Empty States */
+  .loading-container, .empty-container, .error-container {
+    min-height: 250px;
+    padding: 0 16px;
+  }
+
+  .loading-spinner p,
+  .empty-message p,
+  .error-message p {
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .modal-close {
+    padding: 6px;
+  }
+
+  .modal-close svg {
+    width: 20px;
+    height: 20px;
   }
 }
 </style>

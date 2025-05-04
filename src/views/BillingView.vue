@@ -74,9 +74,9 @@
             <tr>
               <th>Month</th>
               <th v-if="isAdmin">Device ID</th>
-              <th>Total Liters</th>
-              <th>Cubic Consumed (m³)</th>
-              <th>Amount (₱)</th>
+              <th>Liters</th>
+              <th>Cubic</th>
+              <th>Amount(₱)</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -980,16 +980,15 @@ export default {
 
 .billing-view-container {
   background: white;
-  padding: 1.5rem;
+  padding: 1rem;
   border-radius: 0.5rem;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 1200px;
   margin: 0 auto;
 }
 
 .billing-title {
-  font-size: 1.5rem;
+  font-size: clamp(1.1rem, 5vw, 1.75rem);
   color: var(--secondary-color);
   margin-bottom: 1.5rem;
   font-weight: 600;
@@ -999,15 +998,16 @@ export default {
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-bottom: 1.5rem;
   justify-content: space-between;
+  align-items: center;
 }
 
 .search-bar {
   position: relative;
   flex: 1;
-  min-width: 200px;
+  min-width: 180px;
 }
 
 .search-input {
@@ -1015,7 +1015,7 @@ export default {
   padding: 0.5rem 2rem 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
   color: var(--text-dark);
   transition: border-color 0.3s ease;
 }
@@ -1031,10 +1031,12 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-light);
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
 }
 
 .month-selector {
-  min-width: 150px;
+  min-width: 140px;
+  flex: 1;
 }
 
 .month-select {
@@ -1042,7 +1044,7 @@ export default {
   padding: 0.5rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
   color: var(--text-dark);
   background: white;
   cursor: pointer;
@@ -1055,7 +1057,8 @@ export default {
 }
 
 .refresh-button-container {
-  min-width: 150px;
+  min-width: 140px;
+  flex: 1;
 }
 
 .refresh-button {
@@ -1065,7 +1068,7 @@ export default {
   border: none;
   border-radius: 4px;
   color: white;
-  font-size: 0.9rem;
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
   cursor: pointer;
   transition: background-color 0.3s ease;
   display: flex;
@@ -1087,13 +1090,14 @@ export default {
   border-left: 4px solid #c62828;
   animation: fadeIn 0.3s ease-in-out;
   text-align: center;
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
 }
 
 .loading {
   text-align: center;
   padding: 1rem;
   color: var(--text-medium);
-  font-size: 0.9rem;
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
 }
 
 @keyframes fadeIn {
@@ -1110,7 +1114,7 @@ export default {
 .table-wrapper {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
   backdrop-filter: blur(8px);
-  padding: 1rem;
+  padding: 0.75rem;
   border-radius: 0.75rem;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
   border-left: 4px solid #388e3c;
@@ -1138,23 +1142,26 @@ export default {
 .billing-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 600px;
 }
 
 .billing-table th {
-  font-size: 0.9rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.9rem);
   color: var(--secondary-color);
   font-weight: 600;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   background: var(--background-light);
   border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .billing-table td {
-  font-size: 0.85rem;
+  font-size: clamp(0.7rem, 2.5vw, 0.85rem);
   color: var(--text-dark);
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .billing-table tr:hover {
@@ -1163,9 +1170,10 @@ export default {
 
 .no-data {
   text-align: center;
-  padding: 1.5rem;
+  padding: 1rem;
   color: var(--text-medium);
   font-style: italic;
+  font-size: clamp(0.8rem, 3vw, 0.9rem);
 }
 
 .status-paid {
@@ -1179,14 +1187,15 @@ export default {
 }
 
 .status-select {
-  padding: 0.4rem;
+  padding: 0.3rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: white;
-  font-size: 0.85rem;
+  font-size: clamp(0.7rem, 2.5vw, 0.85rem);
   color: var(--text-dark);
   cursor: pointer;
   transition: border-color 0.3s ease;
+  width: 100%;
 }
 
 .status-select:focus {
@@ -1195,11 +1204,11 @@ export default {
 }
 
 .action-button {
-  padding: 0.4rem 0.8rem;
+  padding: 0.3rem 0.6rem;
   border: none;
   background-color: #388e3c;
   color: white;
-  font-size: 0.8rem;
+  font-size: clamp(0.7rem, 2.5vw, 0.8rem);
   font-weight: 500;
   border-radius: 4px;
   cursor: pointer;
@@ -1207,6 +1216,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  white-space: nowrap;
 }
 
 .action-button:hover {
@@ -1225,26 +1235,27 @@ export default {
   display: flex;
   align-items: center;
   background-color: rgba(76, 175, 80, 0.1);
-  padding: 6px;
+  padding: 4px;
   border-radius: 8px;
   border: 1px solid rgba(76, 175, 80, 0.2);
   flex-wrap: wrap;
+  gap: 0.25rem;
 }
 
 .pagination-button {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: none;
   background: transparent;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
   color: #555;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
 .pagination-button.active {
@@ -1281,18 +1292,19 @@ export default {
   border-radius: 6px;
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin: 0 8px;
+  margin: 0 6px;
+  flex-wrap: wrap;
 }
 
 .page-number {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: none;
   background: transparent;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
   color: #555;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   position: relative;
   z-index: 1;
 }
@@ -1321,7 +1333,7 @@ export default {
 }
 
 .ellipsis {
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   color: var(--text-medium);
   padding: 0 0.5rem;
   display: flex;
@@ -1331,128 +1343,248 @@ export default {
 .pagination-info {
   text-align: center;
   margin-top: 0.5rem;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   color: var(--text-medium);
 }
 
+/* Large screens (992px and above) */
 @media (min-width: 992px) {
   .billing-view-container {
     padding: 2rem;
+    max-width: 1200px;
   }
 
   .billing-title {
     font-size: 1.75rem;
   }
 
+  .filters {
+    flex-wrap: nowrap;
+    gap: 1rem;
+  }
+
   .billing-table th,
   .billing-table td {
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .table-wrapper {
+    padding: 1rem;
   }
 }
 
+/* Medium screens (768px to 991.99px) */
 @media (min-width: 768px) and (max-width: 991.99px) {
   .billing-view-container {
-    padding: 1.25rem;
+    padding: 1.5rem;
   }
 
   .billing-title {
     font-size: 1.5rem;
   }
 
-  .billing-table th,
-  .billing-table td {
-    padding: 0.6rem 0.8rem;
-    font-size: 0.8rem;
-  }
-
   .filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-@media (max-width: 767.99px) {
-  .billing-view-container {
-    padding: 1rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
-  .billing-title {
-    font-size: 1.25rem;
-  }
-
-  .filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pagination-toggle {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .pagination-button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
-  }
-
-  .page-number {
-    padding: 6px 10px;
-    font-size: 0.8rem;
+  .search-bar,
+  .month-selector,
+  .refresh-button-container {
+    min-width: 200px;
+    flex: 1;
   }
 
   .billing-table th,
   .billing-table td {
-    font-size: 0.75rem;
-    padding: 0.5rem 0.6rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
   }
 
   .table-wrapper {
-    margin: 0 -0.5rem;
+    padding: 0.75rem;
   }
-
-  .pagination-controls {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .status-select,
-  .action-button {
-    font-size: 0.75rem;
-    padding: 0.3rem;
-  }
-}
-
-@media (max-width: 400px) {
-  .billing-title {
-    font-size: 1.1rem;
-  }
-
-  .pagination-button {
-    padding: 5px 10px;
-    font-size: 0.75rem;
-  }
-
-  .page-number {
-    padding: 5px 8px;
-    font-size: 0.75rem;
-  }
-
-  .billing-table th,
-  .billing-table td {
-    font-size: 0.7rem;
-    padding: 0.4rem 0.5rem;
-  }
-
-  .status-select,
-  .action-button {
-    font-size: 0.7rem;
+}/* Extra small screens (below 576px) - Mobile First */
+/* Extra small screens (below 576px) - Mobile First */
+@media (max-width: 575.99px) {
+  .billing-view-container {
     padding: 0.2rem;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .billing-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    padding: 0 0.2rem;
+  }
+
+  .filters {
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+    padding: 0 0.2rem;
+  }
+
+  .search-bar,
+  .month-selector,
+  .refresh-button-container {
+    width: 100%;
   }
 
   .search-input,
   .month-select,
   .refresh-button {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    padding: 0.4rem;
+    width: 100%;
+  }
+
+  .print-button-container {
+    display: flex;
+    justify-content: center;
+    margin: 0.3rem 0;
+  }
+
+  .print-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+  }
+
+  .table-wrapper {
+    margin: 0 -0.2rem;
+    width: calc(100% + 0.4rem);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .billing-table {
+    min-width: 100%;
+    font-size: 0.7rem;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .billing-table th,
+  .billing-table td {
+    padding: 0.3rem 0.4rem;
+    min-width: 55px;
+    max-width: 75px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Compact column widths */
+  .billing-table th:nth-child(1),
+  .billing-table td:nth-child(1) {
+    min-width: 65px; /* Month */
+  }
+  
+  .billing-table th:nth-child(2),
+  .billing-table td:nth-child(2) {
+    min-width: 55px; /* Device ID */
+  }
+  
+  .billing-table th:nth-child(3),
+  .billing-table td:nth-child(3) {
+    min-width: 45px; /* Liters */
+  }
+  
+  .billing-table th:nth-child(4),
+  .billing-table td:nth-child(4) {
+    min-width: 45px; /* Cubic */
+  }
+  
+  .billing-table th:nth-child(5),
+  .billing-table td:nth-child(5) {
+    min-width: 55px; /* Amount */
+  }
+  
+  .billing-table th:nth-child(6),
+  .billing-table td:nth-child(6) {
+    min-width: 65px; /* Status */
+  }
+  
+  .billing-table th:nth-child(7),
+  .billing-table td:nth-child(7) {
+    min-width: 65px; /* Action */
+  }
+
+  /* Make status dropdown more compact */
+  .status-select {
+    padding: 0.2rem 0.25rem;
+    font-size: 0.65rem;
+  }
+
+  /* Compact action buttons */
+  .action-button {
+    width: 99%;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.65rem;
+    justify-content: center;
+  }
+
+  /* Hide icons in buttons to save space */
+  .action-button i {
+    display: none;
+  }
+
+  /* Pagination compact style */
+  .pagination-controls {
+    padding: 0.2rem 0;
+  }
+
+  .pagination-button,
+  .page-number {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.65rem;
+    min-width: 25px;
+  }
+
+  .pagination-info {
+    font-size: 0.65rem;
   }
 }
+/* Small screens (576px to 767.99px) */
+@media (min-width: 576px) and (max-width: 767.99px) {
+  .billing-view-container {
+    padding: 1rem;
+  }
+
+  .filters {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .search-bar,
+  .month-selector {
+    min-width: calc(50% - 0.375rem);
+  }
+
+  .refresh-button-container {
+    width: 100%;
+  }
+
+  .table-wrapper {
+    padding: 0.5rem;
+  }
+
+  .billing-table th,
+  .billing-table td {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .action-button {
+    padding: 0.4rem 0.6rem;
+  }
+}
+
+
 </style>
