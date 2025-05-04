@@ -16,13 +16,13 @@
       <div class="hero-section">
         <div class="hero-content">
           <h1>Smart Water Management for Modern Homes</h1>
-          <p>Monitor your water usage in real-time, detect leaks, and save money with FlowSmart's intelligent water management system.</p>
+          <p>Monitor your water usage in real-time and save money with FlowSmart's intelligent water management system.</p>
           <div class="hero-buttons">
             <router-link to="/resident/register2" class="primary-button">Create Account</router-link>
             <button @click="scrollToFeatures" class="secondary-button">Learn More</button>
           </div>
         </div>
-       <div class="hero-image">
+        <div class="hero-image">
           <img src="image1/flow-removebg.png" alt="FlowSmart Dashboard" class="dashboard-image" />
         </div>
       </div>
@@ -41,15 +41,7 @@
             <h3>Real-time Analytics</h3>
             <p>Monitor your water usage patterns with detailed charts and analytics.</p>
           </div>
-          <div class="feature-card">
-            <div class="feature-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-              </svg>
-            </div>
-            <h3>Leak Detection</h3>
-            <p>Get instant alerts when unusual water flow is detected to prevent damage.</p>
-          </div>
+          
           <div class="feature-card">
             <div class="feature-icon">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -77,11 +69,11 @@
     <!-- Footer -->
     <footer class="home-footer">
       <div class="footer-content">
-        <p>&copy; 2023 FlowSmart. All rights reserved.</p>
+        <p>© 2023 FlowSmart. All rights reserved.</p>
         <div class="footer-links">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Service</a>
-          <a href="#">Contact Us</a>
+          <router-link to="/privacy" class="footer-link">Privacy Policy</router-link>
+          <router-link to="/terms" class="footer-link">Terms of Service</router-link>
+          <router-link to="/contact" class="footer-link">Contact Us</router-link>
         </div>
       </div>
     </footer>
@@ -102,35 +94,16 @@ export default {
 </script>
 
 <style>
-/* Reset all margins and padding */
-/* Global Reset */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
 * {
-  margin: 0;
-  padding: 0;
+  font-family: 'Poppins', sans-serif;
   box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow-x: hidden;
-}
-
-/* Remove any default margins from #app */
-#app {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  min-height: 100vh;
 }
 </style>
 
 <style scoped>
 /* Reset all margins and padding */
-/* Global Reset */
 * {
   margin: 0;
   padding: 0;
@@ -157,7 +130,7 @@ body {
 .home-container {
   display: flex;
   flex-direction: column;
-  font-family: Arial, sans-serif;
+  font-family: 'Poppins', sans-serif;
   width: 100%;
   min-height: 100vh;
   margin: 0;
@@ -302,13 +275,13 @@ body {
   height: auto;
   border-radius: 8px;
   display: block;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); /* Shadow directly on image */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .dashboard-image:hover {
-  transform: translateY(-5px) scale(1.02); /* Lift and slight zoom on hover */
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2); /* Enhanced shadow on hover */
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
 }
 
 .features-section {
@@ -386,14 +359,14 @@ body {
   gap: 20px;
 }
 
-.footer-links a {
+.footer-link {
   color: white;
   text-decoration: none;
   opacity: 0.8;
   transition: opacity 0.2s;
 }
 
-.footer-links a:hover {
+.footer-link:hover {
   opacity: 1;
 }
 
@@ -418,7 +391,7 @@ body {
 
   .dashboard-image {
     border-radius: 6px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1); /* Lighter shadow for mobile */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
   }
 
   .dashboard-image:hover {
@@ -438,22 +411,21 @@ body {
 
 /* Tablet-specific styles */
 @media (min-width: 768px) and (max-width: 1023px) {
-  /* Adjust layout for tablets */
   .home-container {
-    padding: 0 20px; /* Add some horizontal padding */
+    padding: 0 20px;
   }
 
   .hero-section {
-    flex-direction: column; /* Stack content vertically for better readability */
+    flex-direction: column;
     padding: 40px 20px;
   }
 
   .hero-content h1 {
-    font-size: 2rem; /* Reduce font size for headings */
+    font-size: 2rem;
   }
 
   .hero-content p {
-    font-size: 1rem; /* Reduce font size for paragraphs */
+    font-size: 1rem;
   }
 
   .hero-image {
@@ -461,7 +433,7 @@ body {
   }
 
   .dashboard-image {
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); /* Slightly lighter shadow for tablets */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
   }
 
   .dashboard-image:hover {
@@ -469,11 +441,11 @@ body {
   }
 
   .features-grid {
-    grid-template-columns: repeat(2, 1fr); /* Show two feature cards per row */
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .footer-content {
-    flex-direction: column; /* Stack footer links vertically */
+    flex-direction: column;
     text-align: center;
   }
 }

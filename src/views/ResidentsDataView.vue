@@ -477,6 +477,7 @@ export default {
 .residents-list {
   padding: 16px;
   position: relative;
+   background: white;
 }
 
 h1 {

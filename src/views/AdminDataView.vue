@@ -505,9 +505,16 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+* {
+  font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
+}
 .admin-data {
   padding: 16px;
   position: relative;
+   background: white;
 }
 
 h1 {

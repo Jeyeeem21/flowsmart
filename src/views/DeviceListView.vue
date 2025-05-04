@@ -417,10 +417,17 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+* {
+  font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
+}
 .device-list {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+  background: white;
 }
 
 h1 {

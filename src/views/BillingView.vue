@@ -957,7 +957,6 @@ export default {
   },
 };
 </script>
-
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
 
@@ -1405,7 +1404,8 @@ export default {
   .table-wrapper {
     padding: 0.75rem;
   }
-}/* Extra small screens (below 576px) - Mobile First */
+}
+
 /* Extra small screens (below 576px) - Mobile First */
 @media (max-width: 575.99px) {
   .billing-view-container {
@@ -1431,6 +1431,7 @@ export default {
   .month-selector,
   .refresh-button-container {
     width: 100%;
+    min-width: 100%;
   }
 
   .search-input,
@@ -1439,6 +1440,11 @@ export default {
     font-size: 0.75rem;
     padding: 0.4rem;
     width: 100%;
+  }
+
+  .search-icon {
+    font-size: 0.75rem;
+    right: 0.5rem;
   }
 
   .print-button-container {
@@ -1480,7 +1486,7 @@ export default {
     text-overflow: ellipsis;
   }
 
-  /* Compact column widths */
+  /* Compact column widths for admin view */
   .billing-table th:nth-child(1),
   .billing-table td:nth-child(1) {
     min-width: 65px; /* Month */
@@ -1524,7 +1530,7 @@ export default {
 
   /* Compact action buttons */
   .action-button {
-    width: 99%;
+    width: 100%;
     padding: 0.3rem 0.4rem;
     font-size: 0.65rem;
     justify-content: center;
@@ -1551,6 +1557,7 @@ export default {
     font-size: 0.65rem;
   }
 }
+
 /* Small screens (576px to 767.99px) */
 @media (min-width: 576px) and (max-width: 767.99px) {
   .billing-view-container {
@@ -1585,6 +1592,4 @@ export default {
     padding: 0.4rem 0.6rem;
   }
 }
-
-
 </style>

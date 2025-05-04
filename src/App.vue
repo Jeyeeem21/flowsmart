@@ -1,7 +1,7 @@
 <template>
   <div id="app">
-    <!-- Header -->
-    <Header v-if="!isHomePage && !isPublicRoute" />
+    <!-- Header: Show on /terms, /privacy, /contact, but not on / (Home) or other public routes -->
+    <Header v-if="showHeader" />
 
     <!-- Main Container -->
     <div class="main-container">
@@ -17,7 +17,7 @@
         class="content"
         :class="{
           'with-sidebar': isLoggedIn && !isHomePage && !isPublicRoute,
-          'no-header': isHomePage || isPublicRoute,
+          'no-header': !showHeader,
           'sidebar-collapsed': isLoggedIn && !isHomePage && !isPublicRoute && !isSidebarExpanded,
         }"
       >
@@ -26,6 +26,7 @@
     </div>
   </div>
 </template>
+
 <script>
 import Header from './components/Header.vue';
 import Sidebar from './components/Sidebar.vue';
@@ -40,7 +41,7 @@ export default {
     return {
       isLoggedIn: true,
       isSidebarExpanded: true,
-      publicRouteNames: ['login', 'registerResidents2', 'not-found'], // Route **names** now
+      publicRouteNames: ['login', 'registerResidents2', 'not-found', 'terms', 'privacy', 'contact', 'help'],
     };
   },
   computed: {
@@ -48,7 +49,11 @@ export default {
       return this.$route.path === '/home' || this.$route.path === '/';
     },
     isPublicRoute() {
-      return this.publicRouteNames.includes(this.$route.name); // Check route **name**
+      return this.publicRouteNames.includes(this.$route.name);
+    },
+    showHeader() {
+      // Show Header on /terms, /privacy, /contact, and authenticated routes (not Home or other public routes)
+      return this.$route.name === 'terms' || this.$route.name === 'privacy' || this.$route.name === 'contact' || (!this.isHomePage && !this.publicRouteNames.includes(this.$route.name));
     },
   },
   methods: {
@@ -59,9 +64,10 @@ export default {
 };
 </script>
 
-
 <style>
 /* Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -69,7 +75,7 @@ export default {
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Poppins', sans-serif;
   background-color: #f5f5f5;
   color: #2c3e50;
 }
@@ -93,23 +99,23 @@ body {
 }
 
 .content.no-header {
-  margin-top: 0; /* Remove top margin when header is hidden */
+  margin-top: 0;
   min-height: 100vh;
 }
 
 .content.with-sidebar {
-  margin-left: 250px; /* Expanded sidebar width */
+  margin-left: 250px;
 }
 
 .content.sidebar-collapsed {
-  margin-left: 60px; /* Collapsed sidebar width */
+  margin-left: 60px;
 }
 
 @media (max-width: 1023px) {
   .content.with-sidebar,
   .content.sidebar-collapsed {
-    margin-left: 0; /* No margin on small screens */
-    padding-bottom: 70px; /* Space for mobile footer nav */
+    margin-left: 0;
+    padding-bottom: 70px;
   }
 }
 </style>
