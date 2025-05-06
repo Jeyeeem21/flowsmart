@@ -119,14 +119,6 @@
           </ul>
         </div>
 
-        <!-- Feedback Form -->
-        <div>
-          <h3 class="text-xl sm:text-2xl font-medium text-gray-600 mb-4">Send Us Feedback</h3>
-          <p class="text-gray-600 mb-4 text-base sm:text-lg">Have questions or requests about your privacy? Let us know!</p>
-          <a href="https://watermeter.app/feedback" class="inline-block bg-green-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-green-600 transition-colors duration-200">
-            Submit Feedback
-          </a>
-        </div>
       </section>
     </div>
   </div>

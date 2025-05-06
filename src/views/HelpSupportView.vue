@@ -231,7 +231,7 @@
           <p class="text-gray-600 mb-4 text-base sm:text-lg">Keep the system updated:</p>
           <ul class="list-disc list-inside space-y-3 text-gray-600 text-base sm:text-lg">
             <li>Check updates in <strong>Settings > Firmware</strong> in the app.</li>
-            <li>Download firmware for Arduino Uno and ESP32 from <a href="https://watermeter.app/support" class="text-blue-500 hover:underline transition-colors duration-200">watermeter.app/support</a>.</li>
+            <li>Download firmware for Arduino Uno and ESP32 from <a href="" class="text-blue-500 hover:underline transition-colors duration-200">watermeter.app/support</a>.</li>
             <li>Flash via Arduino IDE or OTA (ESP32 only) in the app.</li>
           </ul>
         </div>
@@ -248,7 +248,7 @@
           <h3 class="text-xl sm:text-2xl font-medium text-gray-600 mb-4">Contact Info</h3>
           <p class="text-gray-600 mb-4 text-base sm:text-lg">Get assistance:</p>
           <ul class="list-disc list-inside space-y-3 text-gray-600 text-base sm:text-lg">
-            <li><strong>Email</strong>: <a href="mailto:support@watermeter.app" class="text-blue-500 hover:underline transition-colors duration-200">support@watermeter.app</a></li>
+            <li><strong>Email</strong>: <a href="mailto:support@watermeter.app" class="text-blue-500 hover:underline transition-colors duration-200">jmpagaran24@gmail.com</a></li>
             <li><strong>Phone</strong>: +63 912 345 6789</li>
             <li><strong>Support Hours</strong>: Mon-Fri, 9:00 AM - 5:00 PM (PHT)</li>
           </ul>

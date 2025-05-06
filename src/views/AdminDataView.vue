@@ -514,7 +514,7 @@ export default {
 .admin-data {
   padding: 16px;
   position: relative;
-   background: white;
+  background: white;
 }
 
 h1 {

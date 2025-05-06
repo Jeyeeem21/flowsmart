@@ -41,7 +41,7 @@
         <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
         <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
       </svg>
-      <p>Loading resident data...</p>
+      <p>Loading resident data...</p Ascendant p>
     </div>
   </div>
   
@@ -85,7 +85,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="resident in filteredResidents" :key="resident.id">
+        <tr v-for="resident in paginatedResidents" :key="resident.id">
           <td data-label="Name">{{ resident.fullName || 'Not provided' }}</td>
           <td data-label="Address">{{ resident.address || 'Not provided' }}</td>
           <td data-label="Contact Number">{{ resident.contactNumber || 'Not provided' }}</td>
@@ -117,6 +117,37 @@
         </tr>
       </tbody>
     </table>
+    
+    <!-- Pagination Controls -->
+    <div class="pagination-container">
+      <button 
+        class="pagination-btn" 
+        :disabled="currentPage === 1" 
+        @click="previousPage"
+        :class="{ 'disabled': currentPage === 1 }"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        Previous
+      </button>
+      
+      <div class="pagination-info">
+        Page {{ currentPage }} of {{ totalPages }}
+      </div>
+      
+      <button 
+        class="pagination-btn" 
+        :disabled="currentPage === totalPages" 
+        @click="nextPage"
+        :class="{ 'disabled': currentPage === totalPages }"
+      >
+        Next
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+    </div>
   </div>
   
   <!-- Resident View Modal -->
@@ -136,10 +167,9 @@
           <div class="detail-row">
             <span class="detail-label">Full Name:</span>
             <span class="detail-value">{{ selectedResident.fullName || 'Not provided' }}</span>
-
           </div>
           <div class="detail-row">
-            <span class="detail-label">Address :</span>
+            <span class="detail-label">Address:</span>
             <span class="detail-value">{{ selectedResident.address || 'Not provided' }}</span>
           </div>
           <div class="detail-row">
@@ -183,7 +213,7 @@
             />
           </div>
           <div class="form-row">
-            <label class="form-label">Address : </label>
+            <label class="form-label">Address:</label>
             <input 
               type="text" 
               v-model="editedResident.address" 
@@ -314,8 +344,20 @@ export default {
       isSaving: false,
       showToast: false,
       toastMessage: '',
-      toastType: 'success'
+      toastType: 'success',
+      currentPage: 1,
+      itemsPerPage: 5
     };
+  },
+  computed: {
+    totalPages() {
+      return Math.ceil(this.filteredResidents.length / this.itemsPerPage);
+    },
+    paginatedResidents() {
+      const start = (this.currentPage - 1) * this.itemsPerPage;
+      const end = start + this.itemsPerPage;
+      return this.filteredResidents.slice(start, end);
+    }
   },
   methods: {
     async loadResidents() {
@@ -326,12 +368,12 @@ export default {
         const residentsCollection = collection(db, 'users');
         const residentsSnapshot = await getDocs(residentsCollection);
 
-        // Filter users where role is "resident"
         this.residents = residentsSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(user => user.role === "resident");
 
         this.filteredResidents = [...this.residents];
+        this.currentPage = 1;
       } catch (error) {
         console.error('Error loading residents:', error);
         this.error = 'Failed to load resident data. Please try again.';
@@ -343,16 +385,28 @@ export default {
     filterResidents() {
       if (!this.searchQuery.trim()) {
         this.filteredResidents = [...this.residents];
-        return;
+      } else {
+        const query = this.searchQuery.toLowerCase().trim();
+        this.filteredResidents = this.residents.filter(resident => {
+          return (
+            (resident.fullName && resident.fullName.toLowerCase().includes(query)) ||
+            (resident.address && resident.address.toLowerCase().includes(query))
+          );
+        });
       }
-      
-      const query = this.searchQuery.toLowerCase().trim();
-      this.filteredResidents = this.residents.filter(resident => {
-        return (
-          (resident.fullName && resident.fullName.toLowerCase().includes(query)) ||
-          (resident.address && resident.address.toLowerCase().includes(query))
-        );
-      });
+      this.currentPage = 1;
+    },
+    
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+      }
+    },
+    
+    previousPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+      }
     },
     
     formatDate(dateString) {
@@ -401,20 +455,13 @@ export default {
           updatedAt: new Date().toISOString()
         });
         
-        // Update local arrays
         const index = this.residents.findIndex(r => r.id === this.editedResident.id);
         if (index !== -1) {
           this.residents[index] = { ...this.residents[index], ...this.editedResident };
         }
-        const filteredIndex = this.filteredResidents.findIndex(r => r.id === this.editedResident.id);
-        if (filteredIndex !== -1) {
-          this.filteredResidents[filteredIndex] = { ...this.filteredResidents[filteredIndex], ...this.editedResident };
-        }
+        this.filterResidents();
         
-        // Close modal
         this.showEditModal = false;
-        
-        // Show success toast
         this.showToastMessage('Resident updated successfully', 'success');
       } catch (error) {
         console.error('Error updating resident:', error);
@@ -436,14 +483,10 @@ export default {
         const db = getFirestore();
         await deleteDoc(doc(db, 'users', this.selectedResident.id));
         
-        // Remove from local arrays
         this.residents = this.residents.filter(resident => resident.id !== this.selectedResident.id);
-        this.filteredResidents = this.filteredResidents.filter(resident => resident.id !== this.selectedResident.id);
+        this.filterResidents();
         
-        // Close modal
         this.showDeleteModal = false;
-        
-        // Show success toast
         this.showToastMessage('Resident deleted successfully', 'success');
       } catch (error) {
         console.error('Error deleting resident:', error);
@@ -477,7 +520,7 @@ export default {
 .residents-list {
   padding: 16px;
   position: relative;
-   background: white;
+  background: white;
 }
 
 h1 {
@@ -572,6 +615,7 @@ h1 {
 
 /* Error State */
 .error-container {
+  display: flex;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -714,6 +758,46 @@ h1 {
 
 .btn-delete:hover {
   background-color: #ffcdd2;
+}
+
+/* Pagination Styles */
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-top: 1px solid #eee;
+  background-color: white;
+  border-radius: 0 0 8px 8px;
+}
+
+.pagination-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: #f5f5f5;
+  color: #2c3e50;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.pagination-btn:hover:not(.disabled) {
+  background-color: #e0e0e0;
+}
+
+.pagination-btn.disabled {
+  background-color: #f5f5f5;
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+  color: #666;
 }
 
 /* Modal Styles */
@@ -1074,6 +1158,24 @@ h1 {
   .btn-delete svg {
     width: 18px;
     height: 18px;
+  }
+
+  /* Pagination Mobile Styles */
+  .pagination-container {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .pagination-btn {
+    width: 100%;
+    padding: 12px;
+    justify-content: center;
+    font-size: 1rem;
+  }
+
+  .pagination-info {
+    font-size: 0.95rem;
   }
 
   /* Modal Adjustments */

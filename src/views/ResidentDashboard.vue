@@ -1,4 +1,3 @@
-```vue
 <template>
   <div class="analytics-charts">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -12,7 +11,7 @@
       <!-- Top Header -->
       <div class="top-header">
         <h2>Analytics</h2>
-        <p class="realtime-date">  {{ currentDate }}</p>
+        <p class="realtime-date">{{ currentDate }}</p>
       </div>
 
       <!-- Cards Row -->
@@ -120,12 +119,49 @@
           </div>
         </div>
       </div>
+
+      <!-- Pagination Controls -->
+      <div class="pagination-controls">
+        <div class="pagination-toggle">
+          <button
+            class="pagination-button"
+            :disabled="currentPage === 1"
+            @click="goToPage(currentPage - 1)"
+          >
+            <i class="fas fa-chevron-left"></i> Prev
+          </button>
+          <div class="page-numbers">
+            <button
+              v-for="page in displayedPages"
+              :key="page"
+              class="page-number"
+              :class="{ active: currentPage === page }"
+              @click="goToPage(page)"
+            >
+              {{ page }}
+            </button>
+            <span v-if="showEndEllipsis" class="ellipsis">...</span>
+          </div>
+          <button
+            class="pagination-button"
+            :disabled="currentPage === totalPages"
+            @click="goToPage(currentPage + 1)"
+          >
+            Next <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+      <div class="pagination-info">
+        Showing {{ paginatedData.length ? (currentPage - 1) * itemsPerPage + 1 : 0 }} to
+        {{ Math.min(currentPage * itemsPerPage, sensorDataList.length) }} of
+        {{ sensorDataList.length }} entries
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue';
+import { ref, onMounted, watch, nextTick, onUnmounted, computed } from 'vue';
 import { auth, db } from '@/firebase/config';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import Chart from 'chart.js/auto';
@@ -161,12 +197,44 @@ export default {
     const dailyChartContainer = ref(null);
     const monthlyChartContainer = ref(null);
     const yearlyChartContainer = ref(null);
-    const currentDate = ref(new Date().toLocaleDateString()); // Changed to date only
-    const refreshInterval = ref(null); // Store the interval ID
+    const currentDate = ref(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+    const refreshInterval = ref(null);
+    // Pagination state
+    const currentPage = ref(1);
+    const itemsPerPage = ref(5);
+    const totalPages = computed(() => Math.ceil(sensorDataList.value.length / itemsPerPage.value));
+
+    // Paginated data
+    const paginatedData = computed(() => {
+      const start = (currentPage.value - 1) * itemsPerPage.value;
+      const end = start + itemsPerPage.value;
+      return sensorDataList.value.slice(start, end);
+    });
+
+    // Displayed page numbers for pagination
+    const displayedPages = computed(() => {
+      const pages = [];
+      const maxPagesToShow = 5;
+      let startPage = Math.max(1, currentPage.value - Math.floor(maxPagesToShow / 2));
+      let endPage = Math.min(totalPages.value, startPage + maxPagesToShow - 1);
+
+      if (endPage - startPage + 1 < maxPagesToShow) {
+        startPage = Math.max(1, endPage - maxPagesToShow + 1);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+      return pages;
+    });
+
+    const showEndEllipsis = computed(() => {
+      return displayedPages.value[displayedPages.value.length - 1] < totalPages.value;
+    });
 
     // Update real-time date
     const updateCurrentDate = () => {
-      currentDate.value = new Date().toLocaleDateString(); // Changed to date only
+      currentDate.value = new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     };
 
     // Fetch user data
@@ -247,6 +315,7 @@ export default {
           selectedYear.value = new Date().getFullYear();
         }
 
+        currentPage.value = 1; // Reset to first page on new data fetch
         updateChartData();
       } catch (err) {
         console.error('Error fetching sensor data:', err.message, err.code);
@@ -254,11 +323,14 @@ export default {
       }
     };
 
-    // Update chart data
+    // Update chart data with paginated data
     const updateChartData = () => {
-      totalUsage.value = sensorDataList.value.reduce((sum, data) => sum + data.liters, 0) * (unit.value === 'cubic' ? 0.001 : 1);
+      // Use paginated data for calculations
+      const currentData = paginatedData.value;
 
-      const sortedData = sensorDataList.value.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      totalUsage.value = currentData.reduce((sum, data) => sum + data.liters, 0) * (unit.value === 'cubic' ? 0.001 : 1);
+
+      const sortedData = currentData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       if (sortedData.length > 0) {
         latestData.value = {
           tds_ppm: sortedData[0].tds_ppm,
@@ -274,11 +346,15 @@ export default {
           tdsStatus.value = 'safe';
           tdsStatusClass.value = 'status-safe';
         }
+      } else {
+        latestData.value = { tds_ppm: 0, us_cm: 0 };
+        tdsStatus.value = 'safe';
+        tdsStatusClass.value = 'status-safe';
       }
 
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-      todayTotal.value.liters = sensorDataList.value
+      todayTotal.value.liters = currentData
         .filter(data => {
           const date = new Date(data.timestamp);
           const dateStr = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
@@ -287,7 +363,7 @@ export default {
         .reduce((sum, data) => sum + data.liters, 0);
       todayTotal.value.cubic = todayTotal.value.liters * 0.001;
 
-      monthlyTotal.value.liters = sensorDataList.value
+      monthlyTotal.value.liters = currentData
         .filter(data => {
           const date = new Date(data.timestamp);
           return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
@@ -295,7 +371,7 @@ export default {
         .reduce((sum, data) => sum + data.liters, 0);
       monthlyTotal.value.cubic = monthlyTotal.value.liters * 0.001;
 
-      yearlyTotal.value.liters = sensorDataList.value
+      yearlyTotal.value.liters = currentData
         .filter(data => new Date(data.timestamp).getFullYear() === today.getFullYear())
         .reduce((sum, data) => sum + data.liters, 0);
       yearlyTotal.value.cubic = yearlyTotal.value.liters * 0.001;
@@ -303,7 +379,7 @@ export default {
       unitLabel.value = unit.value === 'liters' ? 'Liters' : 'Cubic Meters';
 
       const dailyMap = {};
-      sensorDataList.value.forEach(data => {
+      currentData.forEach(data => {
         const date = new Date(data.timestamp);
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -326,7 +402,7 @@ export default {
         .sort(([a], [b]) => new Date(a) - new Date(b));
 
       const monthlyMap = {};
-      sensorDataList.value.forEach(data => {
+      currentData.forEach(data => {
         const date = new Date(data.timestamp);
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -347,7 +423,7 @@ export default {
         .sort(([a], [b]) => new Date(a + '-01') - new Date(b + '-01'));
 
       const yearlyMap = {};
-      sensorDataList.value.forEach(data => {
+      currentData.forEach(data => {
         const year = new Date(data.timestamp).getFullYear();
         yearlyMap[year] = (yearlyMap[year] || 0) + data.liters;
       });
@@ -374,6 +450,14 @@ export default {
     const toggleUnit = (newUnit) => {
       unit.value = newUnit;
       updateChartData();
+    };
+
+    // Pagination navigation
+    const goToPage = (page) => {
+      if (page >= 1 && page <= totalPages.value) {
+        currentPage.value = page;
+        updateChartData();
+      }
     };
 
     // Create chart
@@ -494,7 +578,7 @@ export default {
     const startAutoRefresh = () => {
       refreshInterval.value = setInterval(() => {
         fetchData();
-      }, 300000); // Refresh every 5 minutes
+      }, 300000); // Refresh every Luftdaten5 minutes
     };
 
     const stopAutoRefresh = () => {
@@ -530,15 +614,20 @@ export default {
       updateChartData();
     });
 
+    // Watch currentPage to update charts when page changes
+    watch(currentPage, () => {
+      updateChartData();
+    });
+
     // Lifecycle hooks
     onMounted(() => {
       fetchUserData();
       updateCurrentDate();
       const dateIntervalId = setInterval(updateCurrentDate, 1000 * 60 * 60 * 24); // Update daily
-      startAutoRefresh(); // Start auto-refresh
+      startAutoRefresh();
       return () => {
         clearInterval(dateIntervalId);
-        stopAutoRefresh(); // Cleanup on unmount
+        stopAutoRefresh();
       };
     });
 
@@ -546,7 +635,7 @@ export default {
       if (dailyChartInstance.value) dailyChartInstance.value.destroy();
       if (monthlyChartInstance.value) monthlyChartInstance.value.destroy();
       if (yearlyChartInstance.value) yearlyChartInstance.value.destroy();
-      stopAutoRefresh(); // Ensure cleanup
+      stopAutoRefresh();
     });
 
     return {
@@ -575,6 +664,13 @@ export default {
       monthlyChartContainer,
       yearlyChartContainer,
       currentDate,
+      currentPage,
+      itemsPerPage,
+      totalPages,
+      paginatedData,
+      displayedPages,
+      showEndEllipsis,
+      goToPage,
     };
   },
 };
@@ -844,7 +940,7 @@ export default {
 }
 
 .unit-label {
-  margin-right: U+00A012px;
+  margin-right: 12px;
   font-weight: 500;
   color: #2c3e50;
   font-size: 0.9rem;
@@ -1007,6 +1103,131 @@ canvas {
   padding: 1rem;
   color: var(--text-medium);
   font-size: 0.9rem;
+}
+
+/* Pagination Controls */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.5rem;
+}
+
+.pagination-toggle {
+  display: flex;
+  align-items: center;
+  background-color: rgba(76, 175, 80, 0.1);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pagination-button {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  color: #555;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pagination-button.active {
+  color: white;
+  font-weight: 600;
+}
+
+.pagination-button.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #388e3c;
+  z-index: -1;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
+}
+
+.pagination-button:not(.active):hover:not(:disabled) {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+}
+
+.pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin: 0 6px;
+  flex-wrap: wrap;
+}
+
+.page-number {
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  color: #555;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  position: relative;
+  z-index: 1;
+}
+
+.page-number.active {
+  color: white;
+  font-weight: 600;
+}
+
+.page-number.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #388e3c;
+  z-index: -1;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
+}
+
+.page-number:not(.active):hover {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+}
+
+.ellipsis {
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  color: #666;
+  padding: 0 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.pagination-info {
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  color: #666;
 }
 
 /* Desktop - Large (4 cards in a row) */

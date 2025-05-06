@@ -2,7 +2,7 @@
   <div class="billing-view-container">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 
-    <h1 class="billing-title">Billing History</h1>
+    <h1 class="billing-title">Bills History</h1>
 
     <!-- Filters -->
     <div class="filters">
@@ -82,41 +82,55 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(bill, index) in paginatedData" :key="index">
-              <td>{{ bill.month }}</td>
-              <td v-if="isAdmin">{{ bill.deviceId }}</td>
-              <td>{{ bill.totalLiters.toFixed(2) }}</td>
-              <td>{{ bill.cubicMeters.toFixed(2) }}</td>
-              <td>{{ bill.amount.toFixed(2) }}</td>
-              <td>
-                <span v-if="!isAdmin" :class="bill.status === 'Paid' ? 'status-paid' : 'status-pending'">
-                  {{ bill.status }}
-                </span>
-                <select
-                  v-else
-                  v-model="bill.status"
-                  @change="updateBillStatus(bill.id, $event.target.value)"
-                  class="status-select"
-                  :aria-label="`Update status for bill ${bill.month}`"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Paid">Paid</option>
-                </select>
-              </td>
-              <td>
-                <button
-                  class="action-button print-button"
-                  @click="printBillingData(bill)"
-                  :aria-label="`Print bill for ${bill.month}`"
-                >
-                  <i class="fas fa-print"></i> Print
-                </button>
-              </td>
-            </tr>
-            <tr v-if="paginatedData.length === 0">
-              <td :colspan="isAdmin ? 7 : 6" class="no-data">No billing data available.</td>
-            </tr>
-          </tbody>
+  <tr v-for="(bill, index) in paginatedData" :key="index">
+    <td>
+      <span v-if="isAdmin" class="month-admin">{{ bill.month.split(' ')[0] }}<br>{{ bill.month.split(' ')[1] }}</span>
+      <span v-else>{{ bill.month }}</span>
+    </td>
+    <td v-if="isAdmin">{{ bill.deviceId }}</td>
+    <td>{{ bill.totalLiters.toFixed(2) }}</td>
+    <td>{{ bill.cubicMeters.toFixed(2) }}</td>
+    <td>
+      <span v-if="bill.totalLiters === 0" class="no-consumption">No Consumption</span>
+      <span v-else>₱ {{ bill.amount.toFixed(2) }}</span>
+    </td>
+    <td>
+      <span
+        v-if="!isAdmin"
+        :class="{
+          'status-paid': bill.status === 'Paid',
+          'status-pending': bill.status === 'Pending',
+          'status-due': bill.status === 'Due'
+        }"
+      >
+        {{ bill.status }}
+      </span>
+      <select
+        v-else
+        v-model="bill.status"
+        @change="updateBillStatus(bill.id, $event.target.value)"
+        class="status-select"
+        :aria-label="`Update status for bill ${bill.month}`"
+      >
+        <option value="Pending">Pending</option>
+        <option value="Paid">Paid</option>
+        <option value="Due">Due</option>
+      </select>
+    </td>
+    <td>
+      <button
+        class="action-button print-button"
+        @click="printBillingData(bill)"
+        :aria-label="`Print bill for ${bill.month}`"
+      >
+        <i class="fas fa-print"></i> Print
+      </button>
+    </td>
+  </tr>
+  <tr v-if="paginatedData.length === 0">
+    <td :colspan="isAdmin ? 7 : 6" class="no-data">No billing data available.</td>
+  </tr>
+</tbody>
         </table>
       </div>
 
@@ -162,7 +176,6 @@
     </div>
   </div>
 </template>
-
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { auth, db } from '@/firebase/config';
@@ -179,7 +192,7 @@ export default {
     const userDeviceId = ref(null);
     const userId = ref(null);
     const currentPage = ref(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 5;
     const saving = ref(false);
     const settings = ref({});
     const searchQuery = ref('');
@@ -196,7 +209,8 @@ export default {
             billingRate: data.billingRate || 110,
             monthlyQuotaCubicMeters: data.monthlyQuotaCubicMeters || 12,
             pricePerCubicMeterAboveQuota: data.pricePerCubicMeterAboveQuota || 25,
-            billingCalculationDate: data.billingCalculationDate || 4
+            billingCalculationDate: data.billingCalculationDate || 4,
+            dueDateDays: data.dueDateDays || 2
           };
           console.log('Fetched settings from Settings/global:', settings.value);
         } else {
@@ -205,7 +219,8 @@ export default {
             billingRate: 110,
             monthlyQuotaCubicMeters: 12,
             pricePerCubicMeterAboveQuota: 25,
-            billingCalculationDate: 4
+            billingCalculationDate: 4,
+            dueDateDays: 2
           };
         }
       } catch (err) {
@@ -215,7 +230,8 @@ export default {
           billingRate: 110,
           monthlyQuotaCubicMeters: 12,
           pricePerCubicMeterAboveQuota: 25,
-          billingCalculationDate: 4
+          billingCalculationDate: 4,
+          dueDateDays: 2
         };
       }
     };
@@ -242,27 +258,18 @@ export default {
       availableMonths.value = monthYears;
     };
 
-    // Check if today is the billing calculation day for the selected month
-    const isBillingCalculationDay = (monthYear) => {
+    // Calculate due date for a bill
+    const calculateDueDate = (monthYear) => {
       const [monthName, year] = monthYear.split(' ');
       const monthIndex = [
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
       ].indexOf(monthName);
       const currentYear = parseInt(year);
-      const today = new Date();
       const billingDate = new Date(currentYear, monthIndex, settings.value.billingCalculationDate);
-      const isToday = (
-        today.getDate() === settings.value.billingCalculationDate &&
-        today.getMonth() === monthIndex &&
-        today.getFullYear() === currentYear
-      );
-      console.log(`Checking if today is billing calculation day for ${monthYear}:`, {
-        today: today.toISOString(),
-        billingDate: billingDate.toISOString(),
-        isToday
-      });
-      return isToday;
+      const dueDate = new Date(billingDate);
+      dueDate.setDate(billingDate.getDate() + settings.value.dueDateDays);
+      return dueDate;
     };
 
     // Fetch user data and determine role
@@ -319,15 +326,22 @@ export default {
         ].indexOf(monthName);
         const currentYear = parseInt(year);
 
-        const endDate = new Date(currentYear, monthIndex, settings.value.billingCalculationDate, 23, 59, 59, 999);
-        const prevMonthDate = new Date(currentYear, monthIndex - 1, settings.value.billingCalculationDate, 23, 59, 59, 999);
+        // Set endDate to the last day of the selected month
+        const endDate = new Date(currentYear, monthIndex + 1, 0, 23, 59, 59, 999);
+        // Set prevMonthDate to the last day of the previous month
+        const prevMonthYear = getPreviousMonthYear(monthYear);
+        const prevMonthIndex = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ].indexOf(prevMonthYear.split(' ')[0]);
+        const prevYear = parseInt(prevMonthYear.split(' ')[1]);
+        const prevMonthDate = new Date(prevYear, prevMonthIndex + 1, 0, 23, 59, 59, 999);
 
         console.log(`Fetching SensorData for ${monthYear}:`, {
           endDate: endDate.toISOString(),
           prevMonthDate: prevMonthDate.toISOString()
         });
 
-        // Fetch all sensor data
         const q = query(collection(db, 'SensorData'));
         const querySnapshot = await getDocs(q);
         console.log(`Found ${querySnapshot.docs.length} SensorData documents`);
@@ -337,7 +351,6 @@ export default {
           const data = doc.data();
           console.log('Raw SensorData:', data);
 
-          // Handle Firestore Timestamp or ISO string
           let timestamp;
           if (data.timestamp instanceof Timestamp) {
             timestamp = data.timestamp.toDate();
@@ -348,7 +361,6 @@ export default {
             return;
           }
 
-          // Validate data
           if (
             typeof data.id === 'string' &&
             (typeof data.liters === 'number' || (typeof data.liters === 'string' && !isNaN(parseFloat(data.liters))))
@@ -363,12 +375,13 @@ export default {
               };
             }
 
-            // Accumulate liters based on timestamp
-            if (timestamp <= endDate) {
+            // Accumulate liters for the selected month
+            if (timestamp <= endDate && timestamp.getFullYear() === currentYear && timestamp.getMonth() === monthIndex) {
               usageByDevice[deviceId].totalLiters += liters;
               console.log(`Added ${liters} liters to ${deviceId} for totalLiters (timestamp: ${timestamp})`);
             }
-            if (timestamp <= prevMonthDate) {
+            // Accumulate liters for the previous month
+            if (timestamp <= prevMonthDate && timestamp.getFullYear() === prevYear && timestamp.getMonth() === prevMonthIndex) {
               usageByDevice[deviceId].pastLiters += liters;
               console.log(`Added ${liters} liters to ${deviceId} for pastLiters (timestamp: ${timestamp})`);
             }
@@ -380,7 +393,6 @@ export default {
           }
         });
 
-        // Calculate cubics for each device
         Object.keys(usageByDevice).forEach(deviceId => {
           const totalLiters = usageByDevice[deviceId].totalLiters;
           const pastLiters = usageByDevice[deviceId].pastLiters;
@@ -456,11 +468,11 @@ export default {
       }
     };
 
-    // Generate bills for all residents without existing bills
-    const generateBills = async () => {
+    // Generate or update bills for all residents
+    const generateBills = async (forceUpdate = false) => {
       try {
         const monthYear = selectedMonthYear.value;
-        console.log(`Starting bill generation for ${monthYear}`);
+        console.log(`Starting bill generation for ${monthYear}${forceUpdate ? ' (force update)' : ''}`);
         const residents = await fetchResidents();
         if (residents.length === 0) {
           error.value = 'No residents found.';
@@ -468,35 +480,38 @@ export default {
           return;
         }
 
-        // Fetch existing bills to determine which devices already have bills
         const existingBillsQuery = query(collection(db, 'Billing'), where('month', '==', monthYear));
         const existingBillsSnapshot = await getDocs(existingBillsQuery);
-        const existingDeviceIds = existingBillsSnapshot.docs.map(doc => doc.data().deviceId);
-        console.log(`Existing bills for ${monthYear}:`, existingDeviceIds);
+        const existingBills = {};
+        existingBillsSnapshot.forEach(doc => {
+          existingBills[doc.data().deviceId] = { id: doc.id, ...doc.data() };
+        });
+        console.log(`Existing bills for ${monthYear}:`, Object.keys(existingBills));
 
         const usageByDevice = await fetchSensorData(monthYear);
         for (const resident of residents) {
           const deviceId = resident.deviceId;
+          const billId = `${deviceId}_${monthYear.replace(' ', '_')}`;
+          const existingBill = existingBills[deviceId];
 
-          // Skip devices that already have bills for this month
-          if (existingDeviceIds.includes(deviceId)) {
+          // Skip if bill exists and not forcing an update
+          if (existingBill && !forceUpdate) {
             console.log(`Bill already exists for device ${deviceId} in ${monthYear}, skipping.`);
             continue;
           }
 
-          const billId = `${deviceId}_${monthYear.replace(' ', '_')}`;
+          // Delete existing bill if updating
+          if (existingBill && forceUpdate) {
+            await deleteDoc(doc(db, 'Billing', billId)).catch(err => console.warn(`Failed to delete bill ${billId}:`, err));
+            console.log(`Deleted existing bill ${billId} for update`);
+          }
 
-          // Delete any stale bill data (just in case)
-          await deleteDoc(doc(db, 'Billing', billId)).catch(err => console.warn(`Failed to delete bill ${billId}:`, err));
-
-          // Fetch previous bill to get pastCubics
           const previousBill = await fetchPreviousBill(deviceId, monthYear);
           let pastCubics = 0;
           if (previousBill && typeof previousBill.currentCubics === 'number') {
             pastCubics = previousBill.currentCubics;
           }
 
-          // Use sensor data if available, otherwise default to zero consumption
           const deviceData = usageByDevice[deviceId] || {
             totalLiters: 0,
             pastLiters: 0,
@@ -506,23 +521,31 @@ export default {
           };
           const { totalLiters, cubicConsumed } = deviceData;
 
-          // Calculate currentCubics
-          const currentCubics = pastCubics + cubicConsumed;
+          let amount = 0;
+          let currentCubics = pastCubics;
+          let cubicConsumedAdjusted = cubicConsumed;
 
-          let amount;
-          if (cubicConsumed <= settings.value.monthlyQuotaCubicMeters && cubicConsumed >= 0) {
-            amount = settings.value.billingRate; // Flat rate for consumption <= 12 m³
-          } else if (cubicConsumed > settings.value.monthlyQuotaCubicMeters) {
-            amount = settings.value.billingRate + ((cubicConsumed - settings.value.monthlyQuotaCubicMeters) * settings.value.pricePerCubicMeterAboveQuota);
+          if (totalLiters === 0) {
+            cubicConsumedAdjusted = 0;
+            currentCubics = 0;
+            amount = 0;
+            console.log(`No consumption for ${deviceId} in ${monthYear}, setting all values to 0`);
           } else {
-            amount = settings.value.billingRate; // Default to flat rate for new devices with no data
+            currentCubics = pastCubics + cubicConsumed;
+            if (cubicConsumed <= settings.value.monthlyQuotaCubicMeters && cubicConsumed >= 0) {
+              amount = settings.value.billingRate;
+            } else if (cubicConsumed > settings.value.monthlyQuotaCubicMeters) {
+              amount = settings.value.billingRate + ((cubicConsumed - settings.value.monthlyQuotaCubicMeters) * settings.value.pricePerCubicMeterAboveQuota);
+            } else {
+              amount = settings.value.billingRate;
+            }
           }
 
           console.log(`Calculated bill for ${deviceId}:`, {
             totalLiters,
             pastCubics,
             currentCubics,
-            cubicConsumed,
+            cubicConsumed: cubicConsumedAdjusted,
             amount
           });
 
@@ -530,12 +553,12 @@ export default {
             deviceId,
             userId: resident.userId,
             month: monthYear,
-            cubicMeters: cubicConsumed,
+            cubicMeters: cubicConsumedAdjusted,
             totalLiters,
             pastCubics,
             currentCubics,
             amount,
-            status: 'Pending',
+            status: existingBill ? existingBill.status : 'Pending', // Preserve existing status
             accountNumber: resident.accountNumber,
             address: resident.address,
             contactNumber: resident.contactNumber,
@@ -546,7 +569,8 @@ export default {
           console.log(`Generating bill ${billId}:`, billData);
           try {
             await setDoc(doc(db, 'Billing', billId), billData);
-            console.log(`Bill created: ${billId}`);
+            console.log(`Bill created/updated: ${billId}`);
+            billingData.value = billingData.value.filter(b => b.id !== billId); // Remove old bill
             billingData.value.push({
               id: billId,
               ...billData,
@@ -563,15 +587,20 @@ export default {
       }
     };
 
-    // Fetch billing data for the selected month
+    // Fetch billing data for the selected month and update due status
     const fetchBillingData = async () => {
       try {
+        loading.value = true;
         console.log(`Fetching billing data for ${selectedMonthYear.value}`);
+        billingData.value = [];
         const q = query(collection(db, 'Billing'), where('month', '==', selectedMonthYear.value));
         const querySnapshot = await getDocs(q);
 
-        billingData.value = querySnapshot.docs
-          .map(doc => {
+        const today = new Date();
+        const billsToUpdate = [];
+
+        billingData.value = await Promise.all(
+          querySnapshot.docs.map(async (doc) => {
             const data = doc.data();
             console.log(`Raw Billing data for ${doc.id}:`, data);
             const isValid =
@@ -579,12 +608,22 @@ export default {
               typeof data.month === 'string' &&
               typeof data.cubicMeters === 'number' && !isNaN(data.cubicMeters) &&
               typeof data.amount === 'number' && !isNaN(data.amount) &&
-              typeof data.status === 'string' && ['Pending', 'Paid'].includes(data.status) &&
+              typeof data.status === 'string' && ['Pending', 'Paid', 'Due'].includes(data.status) &&
               typeof data.userId === 'string';
             if (!isValid) {
               console.warn(`Invalid billing data for ${doc.id}:`, data);
               return null;
             }
+
+            let updatedStatus = data.status;
+            if (data.status === 'Pending') {
+              const dueDate = calculateDueDate(data.month);
+              if (today > dueDate) {
+                updatedStatus = 'Due';
+                billsToUpdate.push({ id: doc.id, status: 'Due' });
+              }
+            }
+
             const bill = {
               id: doc.id,
               deviceId: data.deviceId,
@@ -594,7 +633,7 @@ export default {
               pastCubics: data.pastCubics || 0,
               currentCubics: data.currentCubics || data.cubicMeters || 0,
               amount: data.amount,
-              status: data.status,
+              status: updatedStatus,
               userId: data.userId,
               accountNumber: data.accountNumber || 'N/A',
               address: data.address || 'N/A',
@@ -605,64 +644,36 @@ export default {
             console.log(`Processed bill ${doc.id}:`, bill);
             return bill;
           })
-          .filter(data => data !== null)
-          .filter(data => isAdmin.value || data.deviceId === userDeviceId.value);
+        ).then(bills => bills.filter(data => data !== null))
+         .then(bills => bills.filter(data => isAdmin.value || data.deviceId === userDeviceId.value));
+
+        // Update Firestore for bills that need status change
+        for (const bill of billsToUpdate) {
+          try {
+            const billRef = doc(db, 'Billing', bill.id);
+            await updateDoc(billRef, { status: bill.status });
+            console.log(`Updated bill status for ${bill.id} to ${bill.status}`);
+          } catch (err) {
+            console.error(`Failed to update bill ${bill.id} status:`, err);
+            error.value = `Failed to update bill status for ${bill.id}: ${err.message}.`;
+          }
+        }
 
         console.log(`Fetched billing data for ${selectedMonthYear.value}:`, billingData.value);
 
-        // Generate bills for new devices if today is the billing calculation day or if triggered manually
-        if (isBillingCalculationDay(selectedMonthYear.value)) {
-          console.log(`Today is billing calculation day for ${selectedMonthYear.value}, generating bills for new devices`);
-          await generateBills();
-          // Re-fetch after generating to include new bills
-          const q2 = query(collection(db, 'Billing'), where('month', '==', selectedMonthYear.value));
-          const querySnapshot2 = await getDocs(q2);
-          billingData.value = querySnapshot2.docs
-            .map(doc => {
-              const data = doc.data();
-              console.log(`Raw Billing data (re-fetch) for ${doc.id}:`, data);
-              const isValid =
-                typeof data.deviceId === 'string' &&
-                typeof data.month === 'string' &&
-                typeof data.cubicMeters === 'number' && !isNaN(data.cubicMeters) &&
-                typeof data.amount === 'number' && !isNaN(data.amount) &&
-                typeof data.status === 'string' && ['Pending', 'Paid'].includes(data.status) &&
-                typeof data.userId === 'string';
-              if (!isValid) {
-                console.warn(`Invalid billing data (re-fetch) for ${doc.id}:`, data);
-                return null;
-              }
-              const bill = {
-                id: doc.id,
-                deviceId: data.deviceId,
-                month: data.month,
-                cubicMeters: data.cubicMeters,
-                totalLiters: data.totalLiters || 0,
-                pastCubics: data.pastCubics || 0,
-                currentCubics: data.currentCubics || data.cubicMeters || 0,
-                amount: data.amount,
-                status: data.status,
-                userId: data.userId,
-                accountNumber: data.accountNumber || 'N/A',
-                address: data.address || 'N/A',
-                contactNumber: data.contactNumber || 'N/A',
-                email: data.email || 'N/A',
-                fullName: data.fullName || 'N/A'
-              };
-              console.log(`Processed bill (re-fetch) ${doc.id}:`, bill);
-              return bill;
-            })
-            .filter(data => data !== null)
-            .filter(data => isAdmin.value || data.deviceId === userDeviceId.value);
-          console.log(`Re-fetched billing data after generation:`, billingData.value);
+        // Generate or update bills for the selected month
+        console.log(`Generating/updating bills for ${selectedMonthYear.value}`);
+        await generateBills(false); // Generate new bills only
+        // If no bills were found, try force updating to include late sensor data
+        if (billingData.value.length === 0) {
+          console.log(`No bills found for ${selectedMonthYear.value}, forcing update`);
+          await generateBills(true); // Force update existing bills
         }
       } catch (err) {
         console.error('Error fetching billing data:', err);
         error.value = `Failed to fetch billing data for ${selectedMonthYear.value}: ${err.message}.`;
-        if (isBillingCalculationDay(selectedMonthYear.value)) {
-          console.log(`Error occurred on billing calculation day, attempting to generate bills`);
-          await generateBills();
-        }
+      } finally {
+        loading.value = false;
       }
     };
 
@@ -671,7 +682,7 @@ export default {
       try {
         loading.value = true;
         console.log('Manually refreshing bills');
-        await generateBills();
+        await generateBills(true); // Force update all bills
         await fetchBillingData();
       } catch (err) {
         console.error('Error refreshing bills:', err);
@@ -727,6 +738,7 @@ export default {
             Account Number: ${bill.accountNumber}
           </div>
         `;
+        const dueDate = calculateDueDate(bill.month).toLocaleDateString('en-PH', { day: '2-digit', month: 'long', year: 'numeric' });
         const tableRows = `
           <tr><td>Month</td><td>${bill.month}</td></tr>
           <tr><td>Device ID</td><td>${isAdmin.value ? bill.deviceId : 'N/A'}</td></tr>
@@ -734,7 +746,8 @@ export default {
           <tr><td>Past Cubics</td><td>${bill.pastCubics.toFixed(2)} m³</td></tr>
           <tr><td>Current Cubics</td><td>${bill.currentCubics.toFixed(2)} m³</td></tr>
           <tr><td>Cubic Consumed</td><td>${bill.cubicMeters.toFixed(2)} m³</td></tr>
-          <tr><td>Total Amount</td><td>₱ ${bill.amount.toFixed(2)}</td></tr>
+          <tr><td>Amount</td><td>${bill.totalLiters === 0 ? 'No Consumption' : '₱ ' + bill.amount.toFixed(2)}</td></tr>
+          <tr><td>Due Date</td><td>${dueDate}</td></tr>
           <tr><td>Status</td><td>${bill.status}</td></tr>
         `;
         return `
@@ -760,10 +773,8 @@ export default {
 
       let receipts = '';
       if (bill) {
-        // Specific bill printing
         receipts = generateReceipt(bill);
       } else {
-        // Print all bills as individual receipts, 6 per page
         const receiptGroups = [];
         for (let i = 0; i < paginatedData.value.length; i += 6) {
           const group = paginatedData.value.slice(i, i + 6);
@@ -857,6 +868,9 @@ export default {
               }
               .status-pending {
                 color: #ffc107;
+              }
+              .status-due {
+                color: #f44336;
               }
               .footer {
                 text-align: center;
@@ -957,6 +971,7 @@ export default {
   },
 };
 </script>
+
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
 
@@ -991,7 +1006,7 @@ export default {
   color: var(--secondary-color);
   margin-bottom: 1.5rem;
   font-weight: 600;
-  text-align: center;
+ 
 }
 
 .filters {
@@ -1090,6 +1105,11 @@ export default {
   animation: fadeIn 0.3s ease-in-out;
   text-align: center;
   font-size: clamp(0.8rem, 3vw, 0.9rem);
+}
+
+.no-consumption {
+  color: var(--text-medium);
+  font-style: italic;
 }
 
 .loading {
@@ -1220,6 +1240,12 @@ export default {
 
 .action-button:hover {
   background-color: #2f6f2f;
+}
+
+.month-admin {
+  display: block;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .pagination-controls {
@@ -1370,6 +1396,11 @@ export default {
   .table-wrapper {
     padding: 1rem;
   }
+
+  .month-admin {
+    display: inline;
+    line-height: normal;
+  }
 }
 
 /* Medium screens (768px to 991.99px) */
@@ -1403,6 +1434,53 @@ export default {
 
   .table-wrapper {
     padding: 0.75rem;
+  }
+
+  .month-admin {
+    display: inline;
+    line-height: normal;
+  }
+
+  .billing-table th:nth-child(1),
+  .billing-table td:nth-child(1) {
+    min-width: 65px; /* Month */
+    max-width: 75px;
+  }
+
+  .billing-table th:nth-child(2),
+  .billing-table td:nth-child(2) {
+    min-width: 60px; /* Device ID (admin only) */
+    max-width: 70px;
+  }
+
+  .billing-table th:nth-child(3),
+  .billing-table td:nth-child(3) {
+    min-width: 45px; /* Liters */
+    max-width: 55px;
+  }
+
+  .billing-table th:nth-child(4),
+  .billing-table td:nth-child(4) {
+    min-width: 45px; /* Cubic */
+    max-width: 55px;
+  }
+
+  .billing-table th:nth-child(5),
+  .billing-table td:nth-child(5) {
+    min-width: 50px; /* Amount */
+    max-width: 60px;
+  }
+
+  .billing-table th:nth-child(6),
+  .billing-table td:nth-child(6) {
+    min-width: 65px; /* Status */
+    max-width: 75px;
+  }
+
+  .billing-table th:nth-child(7),
+  .billing-table td:nth-child(7) {
+    min-width: 65px; /* Action */
+    max-width: 75px;
   }
 }
 
@@ -1479,56 +1557,60 @@ export default {
   .billing-table th,
   .billing-table td {
     padding: 0.3rem 0.4rem;
-    min-width: 55px;
-    max-width: 75px;
+    min-width: 45px;
+    max-width: 65px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* Compact column widths for admin view */
   .billing-table th:nth-child(1),
   .billing-table td:nth-child(1) {
-    min-width: 65px; /* Month */
-  }
-  
-  .billing-table th:nth-child(2),
-  .billing-table td:nth-child(2) {
-    min-width: 55px; /* Device ID */
-  }
-  
-  .billing-table th:nth-child(3),
-  .billing-table td:nth-child(3) {
-    min-width: 45px; /* Liters */
-  }
-  
-  .billing-table th:nth-child(4),
-  .billing-table td:nth-child(4) {
-    min-width: 45px; /* Cubic */
-  }
-  
-  .billing-table th:nth-child(5),
-  .billing-table td:nth-child(5) {
-    min-width: 55px; /* Amount */
-  }
-  
-  .billing-table th:nth-child(6),
-  .billing-table td:nth-child(6) {
-    min-width: 65px; /* Status */
-  }
-  
-  .billing-table th:nth-child(7),
-  .billing-table td:nth-child(7) {
-    min-width: 65px; /* Action */
+    min-width: 50px; /* Month */
+    max-width: 60px;
   }
 
-  /* Make status dropdown more compact */
+  .billing-table th:nth-child(2),
+  .billing-table td:nth-child(2) {
+    min-width: 55px; /* Device ID (admin only) */
+    max-width: 65px;
+  }
+
+  .billing-table th:nth-child(3),
+  .billing-table td:nth-child(3) {
+    min-width: 40px; /* Liters */
+    max-width: 50px;
+  }
+
+  .billing-table th:nth-child(4),
+  .billing-table td:nth-child(4) {
+    min-width: 40px; /* Cubic */
+    max-width: 50px;
+  }
+
+  .billing-table th:nth-child(5),
+  .billing-table td:nth-child(5) {
+    min-width: 45px; /* Amount */
+    max-width: 55px;
+  }
+
+  .billing-table th:nth-child(6),
+  .billing-table td:nth-child(6) {
+    min-width: 60px; /* Status */
+    max-width: 70px;
+  }
+
+  .billing-table th:nth-child(7),
+  .billing-table td:nth-child(7) {
+    min-width: 60px; /* Action */
+    max-width: 70px;
+  }
+
   .status-select {
     padding: 0.2rem 0.25rem;
     font-size: 0.65rem;
   }
 
-  /* Compact action buttons */
   .action-button {
     width: 100%;
     padding: 0.3rem 0.4rem;
@@ -1536,12 +1618,10 @@ export default {
     justify-content: center;
   }
 
-  /* Hide icons in buttons to save space */
   .action-button i {
     display: none;
   }
 
-  /* Pagination compact style */
   .pagination-controls {
     padding: 0.2rem 0;
   }
@@ -1579,17 +1659,67 @@ export default {
   }
 
   .table-wrapper {
-    padding: 0.5rem;
+    overflow-x: auto;
+    padding: 0.75rem;
   }
 
   .billing-table th,
   .billing-table td {
-    padding: 0.5rem;
+    padding: 0.5rem 0.6rem;
     font-size: 0.8rem;
+    min-width: 50px;
+    max-width: 70px;
+  }
+
+  .billing-table th:nth-child(1),
+  .billing-table td:nth-child(1) {
+    min-width: 60px; /* Month */
+    max-width: 70px;
+  }
+
+  .billing-table th:nth-child(2),
+  .billing-table td:nth-child(2) {
+    min-width: 60px; /* Device ID (admin only) */
+    max-width: 70px;
+  }
+
+  .billing-table th:nth-child(3),
+  .billing-table td:nth-child(3) {
+    min-width: 45px; /* Liters */
+    max-width: 55px;
+  }
+
+  .billing-table th:nth-child(4),
+  .billing-table td:nth-child(4) {
+    min-width: 45px; /* Cubic */
+    max-width: 55px;
+  }
+
+  .billing-table th:nth-child(5),
+  .billing-table td:nth-child(5) {
+    min-width: 45px; /* Amount */
+    max-width: 55px;
+  }
+
+  .billing-table th:nth-child(6),
+  .billing-table td:nth-child(6) {
+    min-width: 65px; /* Status */
+    max-width: 75px;
+  }
+
+  .billing-table th:nth-child(7),
+  .billing-table td:nth-child(7) {
+    min-width: 65px; /* Action */
+    max-width: 75px;
   }
 
   .action-button {
     padding: 0.4rem 0.6rem;
+  }
+
+  .month-admin {
+    display: inline;
+    line-height: normal;
   }
 }
 </style>

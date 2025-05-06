@@ -139,7 +139,7 @@
                 </li>
                 <li class="sidebar-submenu-item" :class="{ active: activeItem === 'billing' }">
                   <a href="#" class="sidebar-submenu-link" @click.prevent="setActiveItem('billing')">
-                    Billing
+                    Bills
                   </a>
                 </li>
                 <li class="sidebar-submenu-item" :class="{ active: activeItem === 'alerts' }">
@@ -298,7 +298,7 @@
                 <span>Usage Reports</span>
               </li>
               <li @click="setActiveItem('billing')">
-                <span>Billing</span>
+                <span>Bills</span>
               </li>
               <li @click="setActiveItem('alerts')">
                 <span>Alerts</span>

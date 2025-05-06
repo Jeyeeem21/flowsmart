@@ -1,4 +1,3 @@
-```vue
 <template>
   <div class="usage-report-container">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -58,9 +57,9 @@
               <th>{{ reportType === 'daily' ? 'Date' : reportType === 'monthly' ? 'Month' : 'Year' }}</th>
               <th v-if="isAdmin">Device ID</th>
               <th>Liters</th>
-              <th>Cubic Meters (m³)</th>
-              <th>TDS (ppm)</th>
-              <th>Conductivity (µS/cm)</th>
+              <th>m³</th>
+              <th>TDS</th>
+              <th>µS/cm</th>
             </tr>
           </thead>
           <tbody>
@@ -88,7 +87,7 @@
             @click="currentPage--"
             aria-label="Previous page"
           >
-            <i class="fas fa-chevron-left"></i> Previous
+            <i class="fas fa-chevron-left"></i> Prev
           </button>
           <div class="page-numbers">
             <button
@@ -137,7 +136,7 @@ export default {
     const isAdmin = ref(false);
     const userDeviceId = ref(null);
     const currentPage = ref(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 5;
 
     // Fetch user data and determine role
     const fetchUserData = async () => {
@@ -406,27 +405,28 @@ export default {
 
 .usage-report-container {
   background: white;
-  padding: 1.5rem;
+  padding: 1rem;
   border-radius: 0.5rem;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
+  overflow-x: hidden;
 }
 
 .report-title {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   color: var(--secondary-color);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   font-weight: 600;
 }
 
 .error-message {
   background-color: #ffebee;
   color: #c62828;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   border-left: 4px solid #c62828;
   animation: fadeIn 0.3s ease-in-out;
   text-align: center;
@@ -434,9 +434,9 @@ export default {
 
 .loading {
   text-align: center;
-  padding: 1rem;
+  padding: 0.75rem;
   color: var(--text-medium);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 @keyframes fadeIn {
@@ -448,7 +448,7 @@ export default {
 .toggle-controls {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 /* Toggle Styles */
@@ -456,37 +456,37 @@ export default {
   display: flex;
   align-items: center;
   background-color: rgba(76, 175, 80, 0.1);
-  padding: 6px;
-  border-radius: 8px;
+  padding: 4px;
+  border-radius: 6px;
   border: 1px solid rgba(76, 175, 80, 0.2);
   margin-left: auto;
   flex-wrap: wrap;
 }
 
 .unit-label {
-  margin-right: 12px;
+  margin-right: 8px;
   font-weight: 500;
   color: #2c3e50;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .toggle-container {
   display: flex;
   background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .toggle-button {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: none;
   background: transparent;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
   color: #555;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   position: relative;
   z-index: 1;
 }
@@ -505,8 +505,8 @@ export default {
   height: 100%;
   background-color: #4caf50;
   z-index: -1;
-  border-radius: 4px;
-  box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
+  border-radius: 3px;
+  box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
 }
 
 .toggle-button:not(.active):hover {
@@ -518,18 +518,18 @@ export default {
 .table-wrapper {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
   backdrop-filter: blur(8px);
-  padding: 1rem;
-  border-radius: 0.75rem;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #388e3c;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  border-left: 3px solid #388e3c;
   position: relative;
   overflow-x: auto;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .table-wrapper:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 3px 8px rgba(0, 0, 0, 0.1);
 }
 
 .table-wrapper::before {
@@ -538,32 +538,35 @@ export default {
   top: 0;
   left: 0;
   width: 100%;
-  height: 3px;
+  height: 2px;
   background: linear-gradient(90deg, #388e3c, var(--secondary-color));
-  border-radius: 0.75rem 0.75rem 0 0;
+  border-radius: 0.5rem 0.5rem 0 0;
 }
 
 /* Table */
 .usage-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: auto;
 }
 
 .usage-table th {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--secondary-color);
   font-weight: 600;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   background: var(--background-light);
   border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .usage-table td {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--text-dark);
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .usage-table tr:hover {
@@ -572,12 +575,11 @@ export default {
 
 .no-data {
   text-align: center;
-  padding: 1.5rem;
+  padding: 1rem;
   color: var(--text-medium);
   font-style: italic;
 }
 
-/* Pagination Controls */
 .pagination-controls {
   display: flex;
   justify-content: center;
@@ -590,26 +592,27 @@ export default {
   display: flex;
   align-items: center;
   background-color: rgba(76, 175, 80, 0.1);
-  padding: 6px;
+  padding: 4px;
   border-radius: 8px;
   border: 1px solid rgba(76, 175, 80, 0.2);
   flex-wrap: wrap;
+  gap: 0.25rem;
 }
 
 .pagination-button {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: none;
   background: transparent;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
   color: #555;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
 .pagination-button.active {
@@ -624,7 +627,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: var(--primary-color);
+  background-color: #388e3c;
   z-index: -1;
   border-radius: 4px;
   box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
@@ -646,18 +649,19 @@ export default {
   border-radius: 6px;
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin: 0 8px;
+  margin: 0 6px;
+  flex-wrap: wrap;
 }
 
 .page-number {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: none;
   background: transparent;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
   color: #555;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   position: relative;
   z-index: 1;
 }
@@ -674,7 +678,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: var(--primary-color);
+  background-color: #388e3c;
   z-index: -1;
   border-radius: 4px;
   box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
@@ -686,7 +690,7 @@ export default {
 }
 
 .ellipsis {
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   color: var(--text-medium);
   padding: 0 0.5rem;
   display: flex;
@@ -696,29 +700,16 @@ export default {
 .pagination-info {
   text-align: center;
   margin-top: 0.5rem;
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
   color: var(--text-medium);
 }
+
 
 /* Responsive Design */
 @media (min-width: 992px) {
   .usage-report-container {
-    padding: 2rem;
-  }
-
-  .report-title {
-    font-size: 1.75rem;
-  }
-
-  .usage-table th,
-  .usage-table td {
-    padding: 1rem 1.25rem;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 991.99px) {
-  .usage-report-container {
-    padding: 1.25rem;
+    padding: 1.5rem;
+    max-width: 1200px;
   }
 
   .report-title {
@@ -727,12 +718,11 @@ export default {
 
   .usage-table th,
   .usage-table td {
-    padding: 0.6rem 0.8rem;
-    font-size: 0.8rem;
+    padding: 0.75rem 1rem;
   }
 }
 
-@media (max-width: 767.99px) {
+@media (min-width: 768px) and (max-width: 991.99px) {
   .usage-report-container {
     padding: 1rem;
   }
@@ -741,75 +731,172 @@ export default {
     font-size: 1.25rem;
   }
 
+  .usage-table th,
+  .usage-table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 767.99px) {
+  .usage-report-container {
+    padding: 0.5rem;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .report-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
   .toggle-controls {
     justify-content: center;
+    margin-bottom: 0.5rem;
   }
 
   .unit-toggle {
     width: 100%;
     justify-content: space-between;
+    padding: 3px;
+  }
+
+  .unit-label {
+    font-size: 0.7rem;
+    margin-right: 6px;
   }
 
   .toggle-button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
+    padding: 4px 8px;
+    font-size: 0.65rem;
   }
 
   .pagination-toggle {
-    width: 100%;
+    width: 40%;
     justify-content: space-between;
+    padding: 3px;
   }
 
   .pagination-button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    gap: 0.3rem;
   }
 
   .page-number {
-    padding: 6px 10px;
-    font-size: 0.8rem;
+    padding: 4px 8px;
+    font-size: 0.65rem;
   }
 
   .usage-table th,
   .usage-table td {
-    font-size: 0.75rem;
-    padding: 0.5rem 0.6rem;
+    font-size: 0.65rem;
+    padding: 0.3rem 0.4rem;
+  }
+
+  .usage-table th:nth-child(1),
+  .usage-table td:nth-child(1) {
+    min-width: 80px;
+  }
+
+  .usage-table th:nth-child(2),
+  .usage-table td:nth-child(2) {
+    min-width: 60px;
+  }
+
+  .usage-table th:nth-child(3),
+  .usage-table td:nth-child(3),
+  .usage-table th:nth-child(4),
+  .usage-table td:nth-child(4),
+  .usage-table th:nth-child(5),
+  .usage-table td:nth-child(5),
+  .usage-table th:nth-child(6),
+  .usage-table td:nth-child(6) {
+    min-width: 50px;
   }
 
   .table-wrapper {
-    margin: 0 -0.5rem;
+    margin: 0;
+    padding: 0.5rem;
+    border-radius: 0.3rem;
   }
 
   .pagination-controls {
     flex-direction: column;
     align-items: center;
+    margin-top: 0.5rem;
+  }
+
+  .pagination-info {
+    font-size: 0.65rem;
+    margin-top: 0.3rem;
   }
 }
 
 @media (max-width: 400px) {
+  .usage-report-container {
+    padding: 0.3rem;
+  }
+
   .report-title {
-    font-size: 1.1rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
   }
 
   .toggle-button {
-    padding: 5px 10px;
-    font-size: 0.75rem;
+    padding: 3px 6px;
+    font-size: 0.6rem;
+  }
+
+  .unit-label {
+    font-size: 0.65rem;
+    margin-right: 4px;
   }
 
   .pagination-button {
-    padding: 5px 10px;
-    font-size: 0.75rem;
+    padding: 3px 6px;
+    font-size: 0.6rem;
   }
 
   .page-number {
-    padding: 5px 8px;
-    font-size: 0.75rem;
+    padding: 3px 6px;
+    font-size: 0.6rem;
   }
 
   .usage-table th,
   .usage-table td {
-    font-size: 0.7rem;
-    padding: 0.4rem 0.5rem;
+    font-size: 0.6rem;
+    padding: 0.2rem 0.3rem;
+  }
+
+  .usage-table th:nth-child(1),
+  .usage-table td:nth-child(1) {
+    min-width: 70px;
+  }
+
+  .usage-table th:nth-child(2),
+  .usage-table td:nth-child(2) {
+    min-width: 50px;
+  }
+
+  .usage-table th:nth-child(3),
+  .usage-table td:nth-child(3),
+  .usage-table th:nth-child(4),
+  .usage-table td:nth-child(4),
+  .usage-table th:nth-child(5),
+  .usage-table td:nth-child(5),
+  .usage-table th:nth-child(6),
+  .usage-table td:nth-child(6) {
+    min-width: 45px;
+  }
+
+  .table-wrapper {
+    padding: 0.3rem;
+  }
+
+  .pagination-info {
+    font-size: 0.6rem;
   }
 }
 </style>

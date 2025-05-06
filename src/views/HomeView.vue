@@ -69,7 +69,7 @@
     <!-- Footer -->
     <footer class="home-footer">
       <div class="footer-content">
-        <p>© 2023 FlowSmart. All rights reserved.</p>
+        <p>© 2025 FlowSmart. All rights reserved.</p>
         <div class="footer-links">
           <router-link to="/privacy" class="footer-link">Privacy Policy</router-link>
           <router-link to="/terms" class="footer-link">Terms of Service</router-link>
