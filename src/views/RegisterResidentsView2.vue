@@ -1,8 +1,9 @@
+```vue
 <template>
   <div class="resident-registration">
     <div class="auth-container">
       <div class="auth-card">
-      <button class="btn btn-back-home" @click="goToHome">
+        <button class="btn btn-back-home" @click="goToHome">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
@@ -173,18 +174,17 @@
         </form>
         
         <!-- Registration Success Message -->
-        <!-- Registration Success Message -->
-<div class="success-message" v-if="currentStep === 3">
-  <div class="success-icon">
-    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-      <polyline points="22 4 12 14.01 9 11.01"></polyline>
-    </svg>
-  </div>
-  <h2>Registration Successful!</h2>
-  <p>Your resident account has been created successfully.</p>
-  <button class="btn btn-primary" @click="goToHome">Go to Home</button>
-</div>
+        <div class="success-message" v-if="currentStep === 3">
+          <div class="success-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+          <h2>Registration Successful!</h2>
+          <p>Your resident account has been created successfully. Please log in to continue.</p>
+          <button class="btn btn-primary" @click="router.push('/login')">Go to Login</button>
+        </div>
         
         <!-- Error Alert -->
         <div class="error-alert" v-if="error">
@@ -201,7 +201,7 @@
 </template>
 
 <script>
-import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
 
@@ -229,9 +229,9 @@ export default {
     };
   },
   methods: {
-  goToHome() {
-    this.router.push('/');
-  },
+    goToHome() {
+      this.router.push('/');
+    },
     async registerWithEmail() {
       this.isLoading = true;
       this.error = null;
@@ -280,35 +280,42 @@ export default {
     },
     
     async completeRegistration() {
-  this.isLoading = true;
-  this.error = null;
-  try {
-    if (!this.authUser) {
-      throw new Error('Authentication error. Please try again.');
-    }
-    // Format phone number with country code
-    const formattedPhone = this.formatPhoneWithCountryCode(this.form.contactNumber);
-    // Store additional user data in Firestore
-    await this.storeUserData(this.authUser.uid, formattedPhone);
-    // Move to success step
-    this.currentStep = 3;
-    // Redirect to home page after a short delay
-    setTimeout(() => {
-      this.router.push('/');
-    }, 2000); // Optional: Add a delay to show the success message
-  } catch (error) {
-    console.error('Profile completion error:', error);
-    this.error = this.getErrorMessage(error);
-  } finally {
-    this.isLoading = false;
-  }
-},
+      this.isLoading = true;
+      this.error = null;
+      try {
+        if (!this.authUser) {
+          throw new Error('Authentication error. Please try again.');
+        }
+        // Format phone number with country code
+        const formattedPhone = this.formatPhoneWithCountryCode(this.form.contactNumber);
+        // Store additional user data in Firestore
+        await this.storeUserData(this.authUser.uid, formattedPhone);
+        
+        // Sign out the user to prevent automatic login
+        const auth = getAuth();
+        await signOut(auth);
+        this.authUser = null; // Clear local authUser state
+        
+        // Move to success step
+        this.currentStep = 3;
+        
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          this.router.push('/login');
+        }, 2000);
+      } catch (error) {
+        console.error('Profile completion error:', error);
+        this.error = this.getErrorMessage(error);
+      } finally {
+        this.isLoading = false;
+      }
+    },
     
     async storeUserData(userId, phoneNumber) {
       try {
         const db = getFirestore();
         
-        // Create a document with the user's ID in the 'residents' collection
+        // Create a document with the user's ID in the 'users' collection
         await setDoc(doc(db, 'users', userId), {
           email: this.form.email,
           fullName: this.form.fullName,
@@ -367,7 +374,6 @@ export default {
       }
     },
     
-    // Replace goToResidentDashboard with addMore
     addMore() {
       // Reset the form and go back to step 1
       this.resetForm();
@@ -376,7 +382,6 @@ export default {
       this.authUser = null;
     },
     
-    // Make sure there's a resetForm method
     resetForm() {
       this.form = {
         email: '',
@@ -386,8 +391,6 @@ export default {
         contactNumber: ''
       };
     }
-    
-    // Remove the goToResidentDashboard method
   }
 };
 </script>
