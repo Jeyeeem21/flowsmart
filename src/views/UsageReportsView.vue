@@ -5,8 +5,13 @@
     <h1 class="report-title">Usage Report</h1>
 
     <!-- Error Message -->
-    <div v-if="error" class="error-message" role="alert">
-      {{ error }}
+    <div v-if="error" class="error-container">
+      <svg class="error-icon" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <p>{{ error }}</p>
     </div>
 
     <!-- Loading State -->
@@ -421,15 +426,36 @@ export default {
   font-weight: 600;
 }
 
-.error-message {
+.error-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
   background-color: #ffebee;
-  color: #c62828;
-  padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  margin-bottom: 0.75rem;
-  border-left: 4px solid #c62828;
-  animation: fadeIn 0.3s ease-in-out;
-  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.error-icon {
+  width: 24px;
+  height: 24px;
+  stroke: #c62828;
+  stroke-width: 2;
+  fill: none;
+}
+
+.btn-retry {
+  padding: 0.5rem 1rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-retry:hover {
+  background-color: #388e3c;
 }
 
 .loading {
@@ -580,6 +606,7 @@ export default {
   font-style: italic;
 }
 
+/* Pagination */
 .pagination-controls {
   display: flex;
   justify-content: center;
@@ -635,7 +662,7 @@ export default {
 
 .pagination-button:not(.active):hover:not(:disabled) {
   background-color: rgba(76, 175, 80, 0.1);
-  color: var(--secondary-color);
+  color: #4caf50;
 }
 
 .pagination-button:disabled {
@@ -686,12 +713,12 @@ export default {
 
 .page-number:not(.active):hover {
   background-color: rgba(76, 175, 80, 0.1);
-  color: var(--secondary-color);
+  color: #4caf50;
 }
 
 .ellipsis {
   font-size: clamp(0.75rem, 2.5vw, 0.85rem);
-  color: var(--text-medium);
+  color: #666;
   padding: 0 0.5rem;
   display: flex;
   align-items: center;
@@ -701,79 +728,141 @@ export default {
   text-align: center;
   margin-top: 0.5rem;
   font-size: clamp(0.75rem, 2.5vw, 0.85rem);
-  color: var(--text-medium);
+  color: #666;
 }
 
-
-/* Responsive Design */
-@media (min-width: 992px) {
+/* Mobile Styles */
+@media (max-width: 768px) {
   .usage-report-container {
-    padding: 1.5rem;
-    max-width: 1200px;
+    padding: 16px;
   }
 
-  .report-title {
+  h1 {
     font-size: 1.5rem;
-  }
-
-  .usage-table th,
-  .usage-table td {
-    padding: 0.75rem 1rem;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 991.99px) {
-  .usage-report-container {
-    padding: 1rem;
-  }
-
-  .report-title {
-    font-size: 1.25rem;
-  }
-
-  .usage-table th,
-  .usage-table td {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.75rem;
-  }
-}
-
-@media (max-width: 767.99px) {
-  .usage-report-container {
-    padding: 0.5rem;
-    margin: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .report-title {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 16px;
   }
 
   .toggle-controls {
-    justify-content: center;
-    margin-bottom: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
   .unit-toggle {
-    width: 100%;
-    justify-content: space-between;
-    padding: 3px;
+    flex-wrap: wrap;
   }
 
-  .unit-label {
-    font-size: 0.7rem;
-    margin-right: 6px;
+  .toggle-container {
+    flex-wrap: wrap;
   }
 
   .toggle-button {
-    padding: 4px 8px;
-    font-size: 0.65rem;
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 1rem;
+  }
+
+  /* Table to Card Layout */
+  .table-wrapper {
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .usage-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .usage-table thead {
+    display: none;
+  }
+
+  .usage-table tbody {
+    display: block;
+  }
+
+  .usage-table tr {
+    display: block;
+    background-color: white;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #eee;
+  }
+
+  .usage-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: none;
+    font-size: 0.9rem;
+    white-space: normal;
+    max-width: none;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+
+  .usage-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #666;
+    width: 40%;
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  .usage-table td:not(.actions-column) {
+    padding-right: 0;
+  }
+
+  .usage-table td.actions-column {
+    display: block;
+    margin-top: 12px;
+  }
+
+  .usage-table td[data-label="Date"]::before { content: "Date"; }
+  .usage-table td[data-label="Device ID"]::before { content: "Device ID"; }
+  .usage-table td[data-label="Liters"]::before { content: "Liters"; }
+  .usage-table td[data-label="m³"]::before { content: "m³"; }
+  .usage-table td[data-label="TDS"]::before { content: "TDS"; }
+  .usage-table td[data-label="µS/cm"]::before { content: "µS/cm"; }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .btn-view,
+  .btn-edit,
+  .btn-delete {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    touch-action: manipulation;
+  }
+
+  .btn-view svg,
+  .btn-edit svg,
+  .btn-delete svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Pagination Mobile Styles */
+  .pagination-controls {
+    flex-direction: column;
+    align-items: center;
+    margin-top: 0.5rem;
   }
 
   .pagination-toggle {
-    width: 40%;
+    width: 100%;
     justify-content: space-between;
     padding: 3px;
   }
@@ -789,45 +878,6 @@ export default {
     font-size: 0.65rem;
   }
 
-  .usage-table th,
-  .usage-table td {
-    font-size: 0.65rem;
-    padding: 0.3rem 0.4rem;
-  }
-
-  .usage-table th:nth-child(1),
-  .usage-table td:nth-child(1) {
-    min-width: 80px;
-  }
-
-  .usage-table th:nth-child(2),
-  .usage-table td:nth-child(2) {
-    min-width: 60px;
-  }
-
-  .usage-table th:nth-child(3),
-  .usage-table td:nth-child(3),
-  .usage-table th:nth-child(4),
-  .usage-table td:nth-child(4),
-  .usage-table th:nth-child(5),
-  .usage-table td:nth-child(5),
-  .usage-table th:nth-child(6),
-  .usage-table td:nth-child(6) {
-    min-width: 50px;
-  }
-
-  .table-wrapper {
-    margin: 0;
-    padding: 0.5rem;
-    border-radius: 0.3rem;
-  }
-
-  .pagination-controls {
-    flex-direction: column;
-    align-items: center;
-    margin-top: 0.5rem;
-  }
-
   .pagination-info {
     font-size: 0.65rem;
     margin-top: 0.3rem;
@@ -835,25 +885,6 @@ export default {
 }
 
 @media (max-width: 400px) {
-  .usage-report-container {
-    padding: 0.3rem;
-  }
-
-  .report-title {
-    font-size: 0.9rem;
-    margin-bottom: 0.4rem;
-  }
-
-  .toggle-button {
-    padding: 3px 6px;
-    font-size: 0.6rem;
-  }
-
-  .unit-label {
-    font-size: 0.65rem;
-    margin-right: 4px;
-  }
-
   .pagination-button {
     padding: 3px 6px;
     font-size: 0.6rem;
@@ -862,37 +893,6 @@ export default {
   .page-number {
     padding: 3px 6px;
     font-size: 0.6rem;
-  }
-
-  .usage-table th,
-  .usage-table td {
-    font-size: 0.6rem;
-    padding: 0.2rem 0.3rem;
-  }
-
-  .usage-table th:nth-child(1),
-  .usage-table td:nth-child(1) {
-    min-width: 70px;
-  }
-
-  .usage-table th:nth-child(2),
-  .usage-table td:nth-child(2) {
-    min-width: 50px;
-  }
-
-  .usage-table th:nth-child(3),
-  .usage-table td:nth-child(3),
-  .usage-table th:nth-child(4),
-  .usage-table td:nth-child(4),
-  .usage-table th:nth-child(5),
-  .usage-table td:nth-child(5),
-  .usage-table th:nth-child(6),
-  .usage-table td:nth-child(6) {
-    min-width: 45px;
-  }
-
-  .table-wrapper {
-    padding: 0.3rem;
   }
 
   .pagination-info {

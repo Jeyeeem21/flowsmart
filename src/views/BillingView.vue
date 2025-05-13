@@ -177,7 +177,7 @@
   </div>
 </template>
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { auth, db } from '@/firebase/config';
 import { doc, getDoc, collection, query, getDocs, setDoc, updateDoc, where, deleteDoc } from 'firebase/firestore';
 import { Timestamp } from 'firebase/firestore';
@@ -196,8 +196,53 @@ export default {
     const saving = ref(false);
     const settings = ref({});
     const searchQuery = ref('');
-    const selectedMonthYear = ref('May 2025');
+    const months = ref([
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ]);
+    const monitoringInterval = ref(null);
+    const lastProcessedTimestamp = ref(null);
+    const forceUpdate = ref(0);
+
+    // Add watcher for billing data changes
+    watch(billingData, (newData) => {
+      console.log('Billing data changed:', newData);
+      forceUpdate.value++; // Force component to re-render
+    }, { deep: true });
+
+    // Get current month and year
+    const getCurrentMonthYear = () => {
+      const now = new Date();
+      return `${months.value[now.getMonth()]} ${now.getFullYear()}`;
+    };
+
+    // Get next month and year
+    const getNextMonthYear = () => {
+      const now = new Date();
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return `${months.value[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
+    };
+
+    const selectedMonthYear = ref(getCurrentMonthYear());
     const availableMonths = ref([]);
+
+    // Generate available months
+    const generateAvailableMonths = () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const startYear = 2023;
+      const monthYears = [];
+
+      for (let year = currentYear; year >= startYear; year--) {
+        const startMonth = year === currentYear ? currentMonth : 11;
+        const endMonth = year === startYear ? 0 : 0;
+        for (let month = startMonth; month >= endMonth; month--) {
+          monthYears.push(`${months.value[month]} ${year}`);
+        }
+      }
+      availableMonths.value = monthYears;
+    };
 
     // Fetch settings from Settings/global
     const fetchSettings = async () => {
@@ -209,17 +254,20 @@ export default {
             billingRate: data.billingRate || 110,
             monthlyQuotaCubicMeters: data.monthlyQuotaCubicMeters || 12,
             pricePerCubicMeterAboveQuota: data.pricePerCubicMeterAboveQuota || 25,
-            billingCalculationDate: data.billingCalculationDate || 4,
+            billingCalculationDate: data.billingCalculationDate || 28,
             dueDateDays: data.dueDateDays || 2
           };
           console.log('Fetched settings from Settings/global:', settings.value);
+          
+          // Restart monitoring with new settings
+          await startContinuousMonitoring();
         } else {
           console.warn('Settings/global document not found, using defaults.');
           settings.value = {
             billingRate: 110,
             monthlyQuotaCubicMeters: 12,
             pricePerCubicMeterAboveQuota: 25,
-            billingCalculationDate: 4,
+            billingCalculationDate: 28,
             dueDateDays: 2
           };
         }
@@ -230,32 +278,10 @@ export default {
           billingRate: 110,
           monthlyQuotaCubicMeters: 12,
           pricePerCubicMeterAboveQuota: 25,
-          billingCalculationDate: 4,
+          billingCalculationDate: 28,
           dueDateDays: 2
         };
       }
-    };
-
-    // Generate available months
-    const generateAvailableMonths = () => {
-      const months = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ];
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const startYear = 2023;
-      const monthYears = [];
-
-      for (let year = currentYear; year >= startYear; year--) {
-        const startMonth = year === currentYear ? currentMonth : 11;
-        const endMonth = year === startYear ? 0 : 0;
-        for (let month = startMonth; month >= endMonth; month--) {
-          monthYears.push(`${months[month]} ${year}`);
-        }
-      }
-      availableMonths.value = monthYears;
     };
 
     // Calculate due date for a bill
@@ -320,76 +346,97 @@ export default {
     const fetchSensorData = async (monthYear) => {
       try {
         const [monthName, year] = monthYear.split(' ');
-        const monthIndex = [
-          'January', 'February', 'March', 'April', 'May', 'June',
-          'July', 'August', 'September', 'October', 'November', 'December'
-        ].indexOf(monthName);
+        const monthIndex = months.value.indexOf(monthName);
         const currentYear = parseInt(year);
 
         // Set endDate to the last day of the selected month
         const endDate = new Date(currentYear, monthIndex + 1, 0, 23, 59, 59, 999);
         // Set prevMonthDate to the last day of the previous month
         const prevMonthYear = getPreviousMonthYear(monthYear);
-        const prevMonthIndex = [
-          'January', 'February', 'March', 'April', 'May', 'June',
-          'July', 'August', 'September', 'October', 'November', 'December'
-        ].indexOf(prevMonthYear.split(' ')[0]);
+        const prevMonthIndex = months.value.indexOf(prevMonthYear.split(' ')[0]);
         const prevYear = parseInt(prevMonthYear.split(' ')[1]);
         const prevMonthDate = new Date(prevYear, prevMonthIndex + 1, 0, 23, 59, 59, 999);
 
-        console.log(`Fetching SensorData for ${monthYear}:`, {
+        console.log('Date ranges for sensor data:', {
+          monthYear,
           endDate: endDate.toISOString(),
-          prevMonthDate: prevMonthDate.toISOString()
+          prevMonthDate: prevMonthDate.toISOString(),
+          currentYear,
+          monthIndex
         });
 
         const q = query(collection(db, 'SensorData'));
         const querySnapshot = await getDocs(q);
-        console.log(`Found ${querySnapshot.docs.length} SensorData documents`);
+        console.log(`Found ${querySnapshot.docs.length} total SensorData documents`);
 
         const usageByDevice = {};
         querySnapshot.forEach(doc => {
           const data = doc.data();
-          console.log('Raw SensorData:', data);
+          console.log('Processing sensor data:', {
+            id: data.id,
+            liters: data.liters,
+            timestamp: data.timestamp,
+            rawData: data
+          });
 
           let timestamp;
-          if (data.timestamp instanceof Timestamp) {
-            timestamp = data.timestamp.toDate();
-          } else if (typeof data.timestamp === 'string' && !isNaN(new Date(data.timestamp).getTime())) {
-            timestamp = new Date(data.timestamp);
-          } else {
-            console.warn(`Invalid timestamp for doc ${doc.id}:`, data.timestamp);
+          try {
+            if (data.timestamp instanceof Timestamp) {
+              timestamp = data.timestamp.toDate();
+            } else if (typeof data.timestamp === 'string') {
+              timestamp = new Date(data.timestamp);
+            } else {
+              console.warn(`Invalid timestamp format for doc ${doc.id}:`, data.timestamp);
+              return;
+            }
+          } catch (err) {
+            console.error(`Error parsing timestamp for doc ${doc.id}:`, err);
             return;
           }
 
-          if (
-            typeof data.id === 'string' &&
-            (typeof data.liters === 'number' || (typeof data.liters === 'string' && !isNaN(parseFloat(data.liters))))
-          ) {
-            const deviceId = data.id;
-            const liters = typeof data.liters === 'number' ? data.liters : parseFloat(data.liters);
+          // Validate the data format
+          if (!data.id || typeof data.liters !== 'number') {
+            console.warn(`Invalid data format for doc ${doc.id}:`, data);
+            return;
+          }
 
-            if (!usageByDevice[deviceId]) {
-              usageByDevice[deviceId] = {
-                totalLiters: 0,
-                pastLiters: 0
-              };
-            }
+          const deviceId = data.id;
+          const liters = data.liters;
 
-            // Accumulate liters for the selected month
-            if (timestamp <= endDate && timestamp.getFullYear() === currentYear && timestamp.getMonth() === monthIndex) {
-              usageByDevice[deviceId].totalLiters += liters;
-              console.log(`Added ${liters} liters to ${deviceId} for totalLiters (timestamp: ${timestamp})`);
-            }
-            // Accumulate liters for the previous month
-            if (timestamp <= prevMonthDate && timestamp.getFullYear() === prevYear && timestamp.getMonth() === prevMonthIndex) {
-              usageByDevice[deviceId].pastLiters += liters;
-              console.log(`Added ${liters} liters to ${deviceId} for pastLiters (timestamp: ${timestamp})`);
-            }
-          } else {
-            console.warn(`Invalid sensor data for doc ${doc.id}:`, {
-              id: data.id,
-              liters: data.liters
-            });
+          if (!usageByDevice[deviceId]) {
+            usageByDevice[deviceId] = {
+              totalLiters: 0,
+              pastLiters: 0
+            };
+          }
+
+          // Debug date comparisons
+          const isInCurrentMonth = timestamp <= endDate && 
+                                 timestamp.getFullYear() === currentYear && 
+                                 timestamp.getMonth() === monthIndex;
+          
+          const isInPrevMonth = timestamp <= prevMonthDate && 
+                               timestamp.getFullYear() === prevYear && 
+                               timestamp.getMonth() === prevMonthIndex;
+
+          console.log('Date comparison for sensor data:', {
+            deviceId,
+            timestamp: timestamp.toISOString(),
+            isInCurrentMonth,
+            isInPrevMonth,
+            currentMonthYear: `${months.value[monthIndex]} ${currentYear}`,
+            prevMonthYear: `${months.value[prevMonthIndex]} ${prevYear}`
+          });
+
+          // Accumulate liters for the selected month
+          if (isInCurrentMonth) {
+            usageByDevice[deviceId].totalLiters += liters;
+            console.log(`Added ${liters} liters to ${deviceId} for totalLiters (timestamp: ${timestamp.toISOString()})`);
+          }
+          // Accumulate liters for the previous month
+          if (isInPrevMonth) {
+            usageByDevice[deviceId].pastLiters += liters;
+            console.log(`Added ${liters} liters to ${deviceId} for pastLiters (timestamp: ${timestamp.toISOString()})`);
           }
         });
 
@@ -406,7 +453,7 @@ export default {
             pastCubics,
             cubicConsumed: cubicConsumed >= 0 ? cubicConsumed : 0
           };
-          console.log(`Calculated for ${deviceId}:`, usageByDevice[deviceId]);
+          console.log(`Final calculations for ${deviceId}:`, usageByDevice[deviceId]);
         });
 
         console.log(`Processed SensorData for ${monthYear}:`, usageByDevice);
@@ -593,11 +640,31 @@ export default {
         loading.value = true;
         console.log(`Fetching billing data for ${selectedMonthYear.value}`);
         billingData.value = [];
+        
+        // First ensure settings are up to date
+        await fetchSettings();
+        
         const q = query(collection(db, 'Billing'), where('month', '==', selectedMonthYear.value));
         const querySnapshot = await getDocs(q);
 
         const today = new Date();
         const billsToUpdate = [];
+
+        // Check if we need to calculate next month's bills
+        const currentDay = today.getDate();
+        if (currentDay > settings.value.billingCalculationDate) {
+          const nextMonthYear = getNextMonthYear();
+          
+          // Check if next month's bills already exist
+          const nextMonthQuery = query(collection(db, 'Billing'), where('month', '==', nextMonthYear));
+          const nextMonthSnapshot = await getDocs(nextMonthQuery);
+          
+          if (nextMonthSnapshot.empty) {
+            // Calculate next month's bills
+            console.log(`Calculating bills for next month: ${nextMonthYear}`);
+            await generateBillsForMonth(nextMonthYear);
+          }
+        }
 
         billingData.value = await Promise.all(
           querySnapshot.docs.map(async (doc) => {
@@ -677,13 +744,62 @@ export default {
       }
     };
 
-    // Manual refresh bills (admin only)
+    // Add force recalculation function
+    const forceRecalculateBills = async () => {
+      try {
+        loading.value = true;
+        console.log('Starting force recalculation of bills...');
+        
+        // First ensure we have latest settings
+        await fetchSettings();
+        
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        const currentMonthYear = `${months.value[currentMonth]} ${currentYear}`;
+        const nextMonth = new Date(currentYear, currentMonth + 1, 1);
+        const nextMonthYear = `${months.value[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
+
+        // Delete and recalculate current month's bills
+        console.log(`Recalculating current month (${currentMonthYear}) bills...`);
+        const currentMonthQuery = query(collection(db, 'Billing'), where('month', '==', currentMonthYear));
+        const currentMonthSnapshot = await getDocs(currentMonthQuery);
+        
+        for (const doc of currentMonthSnapshot.docs) {
+          await deleteDoc(doc.ref);
+          console.log(`Deleted existing bill ${doc.id}`);
+        }
+        await generateBillsForMonth(currentMonthYear);
+
+        // Delete and recalculate next month's bills
+        console.log(`Recalculating next month (${nextMonthYear}) bills...`);
+        const nextMonthQuery = query(collection(db, 'Billing'), where('month', '==', nextMonthYear));
+        const nextMonthSnapshot = await getDocs(nextMonthQuery);
+        
+        for (const doc of nextMonthSnapshot.docs) {
+          await deleteDoc(doc.ref);
+          console.log(`Deleted existing bill ${doc.id}`);
+        }
+        await generateBillsForMonth(nextMonthYear);
+
+        // Refresh the displayed data
+        await fetchBillingData();
+        
+        console.log('Force recalculation completed successfully');
+      } catch (err) {
+        console.error('Error in force recalculation:', err);
+        error.value = `Failed to force recalculation: ${err.message}.`;
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    // Update the refreshBills function to use forceRecalculateBills
     const refreshBills = async () => {
       try {
         loading.value = true;
         console.log('Manually refreshing bills');
-        await generateBills(true); // Force update all bills
-        await fetchBillingData();
+        await forceRecalculateBills();
       } catch (err) {
         console.error('Error refreshing bills:', err);
         error.value = `Failed to refresh bills: ${err.message}.`;
@@ -910,7 +1026,7 @@ export default {
       return filteredData.value
         .map(bill => ({
           ...bill,
-          timestamp: new Date(bill.month.split(' ')[1], months.indexOf(bill.month.split(' ')[0])),
+          timestamp: new Date(bill.month.split(' ')[1], months.value.indexOf(bill.month.split(' ')[0])),
         }))
         .sort((a, b) => b.timestamp - a.timestamp);
     });
@@ -938,17 +1054,244 @@ export default {
     });
     const showEllipsis = computed(() => totalPages.value > 5 && visiblePages.value[visiblePages.value.length - 1] < totalPages.value);
 
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
+    // Add new function for generating bills for a specific month
+    const generateBillsForMonth = async (monthYear) => {
+      try {
+        console.log(`Generating bills for ${monthYear}`);
+        const residents = await fetchResidents();
+        if (residents.length === 0) {
+          console.warn('No residents found for bill generation');
+          return;
+        }
 
-    onMounted(() => {
-      fetchUserData();
-    });
+        const usageByDevice = await fetchSensorData(monthYear);
+        for (const resident of residents) {
+          const deviceId = resident.deviceId;
+          const billId = `${deviceId}_${monthYear.replace(' ', '_')}`;
 
-    onUnmounted(() => {
-      billingData.value = [];
+          const previousBill = await fetchPreviousBill(deviceId, monthYear);
+          let pastCubics = 0;
+          if (previousBill && typeof previousBill.currentCubics === 'number') {
+            pastCubics = previousBill.currentCubics;
+          }
+
+          const deviceData = usageByDevice[deviceId] || {
+            totalLiters: 0,
+            pastLiters: 0,
+            currentCubics: 0,
+            pastCubics: 0,
+            cubicConsumed: 0
+          };
+          const { totalLiters, cubicConsumed } = deviceData;
+
+          let amount = 0;
+          let currentCubics = pastCubics;
+          let cubicConsumedAdjusted = cubicConsumed;
+
+          if (totalLiters === 0) {
+            cubicConsumedAdjusted = 0;
+            currentCubics = 0;
+            amount = 0;
+          } else {
+            currentCubics = pastCubics + cubicConsumed;
+            if (cubicConsumed <= settings.value.monthlyQuotaCubicMeters && cubicConsumed >= 0) {
+              amount = settings.value.billingRate;
+            } else if (cubicConsumed > settings.value.monthlyQuotaCubicMeters) {
+              amount = settings.value.billingRate + ((cubicConsumed - settings.value.monthlyQuotaCubicMeters) * settings.value.pricePerCubicMeterAboveQuota);
+            } else {
+              amount = settings.value.billingRate;
+            }
+          }
+
+          const billData = {
+            deviceId,
+            userId: resident.userId,
+            month: monthYear,
+            cubicMeters: cubicConsumedAdjusted,
+            totalLiters,
+            pastCubics,
+            currentCubics,
+            amount,
+            status: 'Pending', // Always start as Pending
+            accountNumber: resident.accountNumber,
+            address: resident.address,
+            contactNumber: resident.contactNumber,
+            email: resident.email,
+            fullName: resident.fullName,
+            lastUpdated: new Date().toISOString()
+          };
+
+          try {
+            await setDoc(doc(db, 'Billing', billId), billData);
+            console.log(`Bill created for ${deviceId} in ${monthYear}`);
+          } catch (writeErr) {
+            console.error(`Failed to write bill ${billId}:`, writeErr);
+          }
+        }
+      } catch (err) {
+        console.error('Error generating bills for month:', err);
+        error.value = `Failed to generate bills for ${monthYear}: ${err.message}.`;
+      }
+    };
+
+    // Function to process new sensor data and update bills
+    const processNewSensorData = async () => {
+      try {
+        const today = new Date();
+        const currentDay = today.getDate();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        const currentMonthYear = `${months.value[currentMonth]} ${currentYear}`;
+        
+        console.log('Checking for new sensor data and updating bills...', {
+          currentDay,
+          currentMonthYear,
+          billingCalculationDate: settings.value.billingCalculationDate
+        });
+
+        // Get latest sensor data
+        const q = query(
+          collection(db, 'SensorData'),
+          where('timestamp', '>', lastProcessedTimestamp.value || new Date(0).toISOString())
+        );
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          console.log(`Found ${querySnapshot.docs.length} new sensor readings`);
+          
+          // Update last processed timestamp
+          const latestDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+          lastProcessedTimestamp.value = latestDoc.data().timestamp;
+
+          // Always update current month's bills when new data arrives
+          console.log('Updating current month bills with new sensor data...');
+          await generateBillsForMonth(currentMonthYear);
+          
+          // If we're past the billing calculation date, also calculate next month
+          if (currentDay >= settings.value.billingCalculationDate) {
+            const nextMonth = new Date(currentYear, currentMonth + 1, 1);
+            const nextMonthYear = `${months.value[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
+            console.log('Calculating next month bills...', nextMonthYear);
+            await generateBillsForMonth(nextMonthYear);
+          }
+
+          // Force refresh the billing data
+          loading.value = true;
+          try {
+            // Clear existing data
+            billingData.value = [];
+            
+            // Fetch fresh data
+            const billingQuery = query(collection(db, 'Billing'), where('month', '==', selectedMonthYear.value));
+            const billingSnapshot = await getDocs(billingQuery);
+            
+            const newBillingData = await Promise.all(
+              billingSnapshot.docs.map(async (doc) => {
+                const data = doc.data();
+                const bill = {
+                  id: doc.id,
+                  deviceId: data.deviceId,
+                  month: data.month,
+                  cubicMeters: data.cubicMeters,
+                  totalLiters: data.totalLiters || 0,
+                  pastCubics: data.pastCubics || 0,
+                  currentCubics: data.currentCubics || data.cubicMeters || 0,
+                  amount: data.amount,
+                  status: data.status,
+                  userId: data.userId,
+                  accountNumber: data.accountNumber || 'N/A',
+                  address: data.address || 'N/A',
+                  contactNumber: data.contactNumber || 'N/A',
+                  email: data.email || 'N/A',
+                  fullName: data.fullName || 'N/A'
+                };
+                return bill;
+              })
+            ).then(bills => bills.filter(data => data !== null))
+             .then(bills => bills.filter(data => isAdmin.value || data.deviceId === userDeviceId.value));
+
+            // Update billing data with new values
+            billingData.value = [...newBillingData];
+            console.log('Table data refreshed with new bills:', billingData.value);
+          } catch (err) {
+            console.error('Error refreshing table data:', err);
+            error.value = `Failed to refresh table: ${err.message}.`;
+          } finally {
+            loading.value = false;
+          }
+        }
+      } catch (err) {
+        console.error('Error processing new sensor data:', err);
+      }
+    };
+
+    // Update the monitoring interval to be more frequent
+    const startContinuousMonitoring = async () => {
+      try {
+        console.log('Starting continuous monitoring of sensor data...');
+        
+        // Clear any existing interval
+        if (monitoringInterval.value) {
+          clearInterval(monitoringInterval.value);
+        }
+
+        // Process immediately on start
+        await processNewSensorData();
+        
+        // Then process every 10 seconds
+        monitoringInterval.value = setInterval(processNewSensorData, 10 * 1000);
+        
+        console.log('Continuous monitoring started');
+      } catch (err) {
+        console.error('Error starting continuous monitoring:', err);
+        error.value = `Failed to start monitoring: ${err.message}.`;
+      }
+    };
+
+    // Update onMounted to ensure monitoring starts
+    onMounted(async () => {
+      try {
+        await fetchUserData();
+        await startContinuousMonitoring();
+        
+        // Also start a daily check for due dates
+        const dailyCheck = setInterval(async () => {
+          const today = new Date();
+          const currentMonth = today.getMonth();
+          const currentYear = today.getFullYear();
+          const currentMonthYear = `${months.value[currentMonth]} ${currentYear}`;
+          
+          // Update bill statuses based on due dates
+          const q = query(collection(db, 'Billing'), where('month', '==', currentMonthYear));
+          const querySnapshot = await getDocs(q);
+          
+          for (const doc of querySnapshot.docs) {
+            const bill = doc.data();
+            if (bill.status === 'Pending') {
+              const dueDate = calculateDueDate(bill.month);
+              if (today > dueDate) {
+                await updateDoc(doc.ref, { 
+                  status: 'Due',
+                  lastUpdated: new Date().toISOString()
+                });
+                console.log(`Updated bill ${doc.id} status to Due`);
+              }
+            }
+          }
+        }, 24 * 60 * 60 * 1000); // Check daily
+
+        // Clean up on unmount
+        onUnmounted(() => {
+          if (monitoringInterval.value) {
+            clearInterval(monitoringInterval.value);
+          }
+          clearInterval(dailyCheck);
+          billingData.value = [];
+        });
+      } catch (err) {
+        console.error('Error in onMounted:', err);
+        error.value = `Failed to initialize: ${err.message}.`;
+      }
     });
 
     return {
@@ -967,6 +1310,8 @@ export default {
       availableMonths,
       printBillingData,
       refreshBills,
+      startContinuousMonitoring,
+      forceUpdate,
     };
   },
 };

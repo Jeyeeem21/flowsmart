@@ -191,7 +191,26 @@ export default {
     },
     handleUnitChange(unit) {
       this.unit = unit;
-      this.processData(this.allData);
+      // Destroy existing charts before processing new data
+      this.destroyCharts();
+      // Wait for next tick to ensure DOM is updated
+      this.$nextTick(() => {
+        this.processData(this.allData);
+      });
+    },
+    destroyCharts() {
+      if (this.dailyChart) {
+        this.dailyChart.destroy();
+        this.dailyChart = null;
+      }
+      if (this.monthlyChart) {
+        this.monthlyChart.destroy();
+        this.monthlyChart = null;
+      }
+      if (this.yearlyChart) {
+        this.yearlyChart.destroy();
+        this.yearlyChart = null;
+      }
     },
     handleFilterChange() {
       this.processData(this.allData);
@@ -363,178 +382,229 @@ export default {
       this.renderCharts();
     },
     renderCharts() {
-      if (!this.$refs.dailyChartContainer || !this.$refs.monthlyChartContainer || !this.$refs.yearlyChartContainer) {
-        console.warn('Canvas elements are not available yet.');
-        return;
-      }
+      // First destroy any existing charts
+      this.destroyCharts();
 
-      if (!this.dailyChartData.length || !this.monthlyChartData.length || !this.yearlyChartData.length) {
-        console.warn('Chart data is empty or invalid.');
-        return;
-      }
-
-      const getValues = (dataArr) => dataArr.map(([_, v]) => this.unit === 'cubic' ? v / 1000 : v);
-      const isMobile = window.innerWidth <= 575.98;
-
-      // Daily Chart
-      if (this.dailyChart) this.dailyChart.destroy();
-      this.dailyChart = new Chart(this.$refs.dailyChartContainer, {
-        type: 'line',
-        data: {
-          labels: this.dailyChartData.map(([k]) => {
-            const [, , day] = k.split('-');
-            return parseInt(day);
-          }),
-          datasets: [{
-            label: `Daily ${this.unitLabel} Usage`,
-            data: getValues(this.dailyChartData),
-           backgroundColor: 'rgba(76, 175, 80, 0.5)', // Semi-transparent green fill
-        borderColor: 'rgba(76, 175, 80, 1)', // Solid green line
-            fill: true,
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            tooltip: {
-              callbacks: {
-                label: (context) => {
-                  const index = context.dataIndex;
-                  const currentValue = context.raw;
-                  const prevValue = index > 0 ? getValues(this.dailyChartData)[index - 1] : null;
-                  const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
-                  if (prevValue !== null && prevValue !== 0) {
-                    const change = ((currentValue - prevValue) / prevValue) * 100;
-                    const direction = change >= 0 ? '↑' : '↓';
-                    labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous day`);
-                  } else {
-                    labels.push(`Change: ↑∞% (previous value was 0)`);
-                  }
-                  return labels;
-                }
-              }
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: { display: true, text: this.unitLabel }
-            },
-            x: {
-              title: { display: true, text: 'Day' },
-              ticks: {
-                stepSize: isMobile ? 2 : 1,
-                callback: function(value) {
-                  return isMobile ? (value % 2 === 0 ? value + 1 : null) : value + 1;
-                }
-              }
-            }
-          }
+      // Wait for next tick to ensure DOM is ready
+      this.$nextTick(() => {
+        if (!this.$refs.dailyChartContainer || !this.$refs.monthlyChartContainer || !this.$refs.yearlyChartContainer) {
+          console.warn('Canvas elements are not available yet.');
+          return;
         }
-      });
 
-      // Monthly Chart
-      if (this.monthlyChart) this.monthlyChart.destroy();
-      this.monthlyChart = new Chart(this.$refs.monthlyChartContainer, {
-        type: 'bar',
-        data: {
-          labels: this.monthlyChartData.map(([k]) => this.months[parseInt(k.split('-')[1])]),
-          datasets: [{
-            label: `Monthly ${this.unitLabel} Usage`,
-            data: getValues(this.monthlyChartData),
-           backgroundColor: 'rgba(76, 175, 80, 0.5)', // Semi-transparent green fill
-        borderColor: 'rgba(76, 175, 80, 1)', // Solid green line
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            tooltip: {
-              callbacks: {
-                label: (context) => {
-                  const index = context.dataIndex;
-                  const currentValue = context.raw;
-                  const prevValue = index > 0 ? getValues(this.monthlyChartData)[index - 1] : null;
-                  const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
-                  if (prevValue !== null && prevValue !== 0) {
-                    const change = ((currentValue - prevValue) / prevValue) * 100;
-                    const direction = change >= 0 ? '↑' : '↓';
-                    labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous month`);
-                  } else {
-                    labels.push(`Change: ↑∞% (previous value was 0)`);
-                  }
-                  return labels;
-                }
-              }
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: { display: true, text: this.unitLabel }
-            },
-            x: {
-              title: { display: true, text: 'Month' }
-            }
-          }
+        // Ensure canvas elements are properly initialized
+        const dailyCtx = this.$refs.dailyChartContainer.getContext('2d');
+        const monthlyCtx = this.$refs.monthlyChartContainer.getContext('2d');
+        const yearlyCtx = this.$refs.yearlyChartContainer.getContext('2d');
+
+        if (!dailyCtx || !monthlyCtx || !yearlyCtx) {
+          console.error('Failed to get 2D context for one or more chart canvases');
+          return;
         }
-      });
 
-      // Yearly Chart
-      if (this.yearlyChart) this.yearlyChart.destroy();
-      this.yearlyChart = new Chart(this.$refs.yearlyChartContainer, {
-        type: 'bar',
-        data: {
-          labels: this.yearlyChartData.map(([k]) => k),
-          datasets: [{
-            label: `Yearly ${this.unitLabel} Usage`,
-            data: getValues(this.yearlyChartData),
-            backgroundColor: 'rgba(76, 175, 80, 0.8)', // Green bar fill
-        borderColor: 'rgba(76, 175, 80, 1)', // Solid green border
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            tooltip: {
-              callbacks: {
-                label: (context) => {
-                  const index = context.dataIndex;
-                  const currentValue = context.raw;
-                  const prevValue = index > 0 ? getValues(this.yearlyChartData)[index - 1] : null;
-                  const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
-                  if (prevValue !== null && prevValue !== 0) {
-                    const change = ((currentValue - prevValue) / prevValue) * 100;
-                    const direction = change >= 0 ? '↑' : '↓';
-                    labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous year`);
-                  } else {
-                    labels.push(`Change: ↑∞% (previous value was 0)`);
+        if (!this.dailyChartData.length || !this.monthlyChartData.length || !this.yearlyChartData.length) {
+          console.warn('Chart data is empty or invalid.');
+          return;
+        }
+
+        const getValues = (dataArr) => dataArr.map(([_, v]) => this.unit === 'cubic' ? v / 1000 : v);
+        const isMobile = window.innerWidth <= 575.98;
+
+        try {
+          // Daily Chart
+          const dailyData = {
+            labels: this.dailyChartData.map(([k]) => {
+              const [, , day] = k.split('-');
+              return parseInt(day);
+            }),
+            datasets: [{
+              label: `Daily ${this.unitLabel} Usage`,
+              data: getValues(this.dailyChartData),
+              backgroundColor: 'rgba(76, 175, 80, 0.2)',
+              borderColor: 'rgba(76, 175, 80, 1)',
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              borderWidth: 2
+            }]
+          };
+
+          this.dailyChart = new Chart(dailyCtx, {
+            type: 'line',
+            data: dailyData,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: {
+                duration: 0
+              },
+              plugins: {
+                legend: {
+                  display: false
+                },
+                tooltip: {
+                  enabled: true,
+                  callbacks: {
+                    label: (context) => {
+                      const index = context.dataIndex;
+                      const currentValue = context.raw;
+                      const prevValue = index > 0 ? getValues(this.dailyChartData)[index - 1] : null;
+                      const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
+                      if (prevValue !== null && prevValue !== 0) {
+                        const change = ((currentValue - prevValue) / prevValue) * 100;
+                        const direction = change >= 0 ? '↑' : '↓';
+                        labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous day`);
+                      } else {
+                        labels.push(`Change: ↑∞% (previous value was 0)`);
+                      }
+                      return labels;
+                    }
                   }
-                  return labels;
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: this.unitLabel }
+                },
+                x: {
+                  title: { display: true, text: 'Day' },
+                  ticks: {
+                    stepSize: isMobile ? 2 : 1,
+                    callback: function(value) {
+                      return isMobile ? (value % 2 === 0 ? value + 1 : null) : value + 1;
+                    }
+                  }
                 }
               }
             }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: { display: true, text: this.unitLabel }
-            },
-            x: {
-              title: { display: true, text: 'Year' }
+          });
+
+          // Monthly Chart
+          const monthlyData = {
+            labels: this.monthlyChartData.map(([k]) => this.months[parseInt(k.split('-')[1])]),
+            datasets: [{
+              label: `Monthly ${this.unitLabel} Usage`,
+              data: getValues(this.monthlyChartData),
+              backgroundColor: 'rgba(76, 175, 80, 0.5)',
+              borderColor: 'rgba(76, 175, 80, 1)',
+              borderWidth: 2,
+              borderRadius: 4
+            }]
+          };
+
+          this.monthlyChart = new Chart(monthlyCtx, {
+            type: 'bar',
+            data: monthlyData,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: {
+                duration: 0
+              },
+              plugins: {
+                legend: {
+                  display: false
+                },
+                tooltip: {
+                  enabled: true,
+                  callbacks: {
+                    label: (context) => {
+                      const index = context.dataIndex;
+                      const currentValue = context.raw;
+                      const prevValue = index > 0 ? getValues(this.monthlyChartData)[index - 1] : null;
+                      const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
+                      if (prevValue !== null && prevValue !== 0) {
+                        const change = ((currentValue - prevValue) / prevValue) * 100;
+                        const direction = change >= 0 ? '↑' : '↓';
+                        labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous month`);
+                      } else {
+                        labels.push(`Change: ↑∞% (previous value was 0)`);
+                      }
+                      return labels;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: this.unitLabel }
+                },
+                x: {
+                  title: { display: true, text: 'Month' }
+                }
+              }
             }
-          }
+          });
+
+          // Yearly Chart
+          const yearlyData = {
+            labels: this.yearlyChartData.map(([k]) => k),
+            datasets: [{
+              label: `Yearly ${this.unitLabel} Usage`,
+              data: getValues(this.yearlyChartData),
+              backgroundColor: 'rgba(76, 175, 80, 0.8)',
+              borderColor: 'rgba(76, 175, 80, 1)',
+              borderWidth: 2,
+              borderRadius: 4
+            }]
+          };
+
+          this.yearlyChart = new Chart(yearlyCtx, {
+            type: 'bar',
+            data: yearlyData,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: {
+                duration: 0
+              },
+              plugins: {
+                legend: {
+                  display: false
+                },
+                tooltip: {
+                  enabled: true,
+                  callbacks: {
+                    label: (context) => {
+                      const index = context.dataIndex;
+                      const currentValue = context.raw;
+                      const prevValue = index > 0 ? getValues(this.yearlyChartData)[index - 1] : null;
+                      const labels = [`${context.dataset.label}: ${currentValue.toFixed(2)} ${this.unitLabel}`];
+                      if (prevValue !== null && prevValue !== 0) {
+                        const change = ((currentValue - prevValue) / prevValue) * 100;
+                        const direction = change >= 0 ? '↑' : '↓';
+                        labels.push(`Change: ${direction}${Math.abs(change).toFixed(2)}% from previous year`);
+                      } else {
+                        labels.push(`Change: ↑∞% (previous value was 0)`);
+                      }
+                      return labels;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: this.unitLabel }
+                },
+                x: {
+                  title: { display: true, text: 'Year' }
+                }
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Error creating charts:', error);
         }
       });
     },
     startAutoRefresh() {
       this.refreshInterval = setInterval(() => {
         this.fetchData();
-      }, 300000); // Refresh every 5 minutes
+      }, 60000); // Refresh every 5 minutes
     },
     stopAutoRefresh() {
       if (this.refreshInterval) {

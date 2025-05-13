@@ -192,9 +192,10 @@
 </template>
 
 <script>
-import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
+import { initializeApp } from 'firebase/app';
 
 export default {
   name: 'AdminRegistration',
@@ -216,8 +217,21 @@ export default {
       showPassword: false,
       isLoading: false,
       error: null,
-      authUser: null
+      authUser: null,
+      registrationAuth: null
     };
+  },
+  created() {
+    // Create a separate auth instance for registration
+    const app = initializeApp({
+      apiKey: "AIzaSyCvZ17lpBTZUWZmgbU1UyVuAEK9ZgjOrOg",
+      authDomain: "flowsmart3x.firebaseapp.com",
+      projectId: "flowsmart3x",
+      storageBucket: "flowsmart3x.firebasestorage.app",
+      messagingSenderId: "902141727005",
+      appId: "1:902141727005:web:68c6771967cda2b113d1f4"
+    }, 'registration');
+    this.registrationAuth = getAuth(app);
   },
   methods: {
     async registerWithEmail() {
@@ -225,9 +239,9 @@ export default {
       this.error = null;
       
       try {
-        const auth = getAuth();
+        // Use the separate auth instance for registration
         const { user } = await createUserWithEmailAndPassword(
-          auth, 
+          this.registrationAuth, 
           this.form.email, 
           this.form.password
         );
@@ -244,38 +258,38 @@ export default {
     },
     
     async signInWithGoogle() {
-  this.isLoading = true;
-  this.error = null;
-  try {
-    const auth = getAuth();
-    const provider = new GoogleAuthProvider();
-    const { user } = await signInWithPopup(auth, provider);
+      this.isLoading = true;
+      this.error = null;
+      try {
+        // Use the separate auth instance for Google sign-in
+        const provider = new GoogleAuthProvider();
+        const { user } = await signInWithPopup(this.registrationAuth, provider);
 
-    // NEW: Check Firestore if email is already used
-    const db = getFirestore();
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('email', '==', user.email));
-    const snapshot = await getDocs(q);
+        // Check Firestore if email is already used
+        const db = getFirestore();
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', user.email));
+        const snapshot = await getDocs(q);
 
-    if (!snapshot.empty) {
-      // ❌ Email already exists in Firestore
-      this.isLoading = false;
-      return this.error = 'This email is already registered. Please use a different one or log in.';
-    }
+        if (!snapshot.empty) {
+          // Email already exists in Firestore
+          this.isLoading = false;
+          return this.error = 'This email is already registered. Please use a different one or log in.';
+        }
 
-    // ✅ Email is available, proceed
-    this.form.email = user.email || '';
-    this.form.fullName = user.displayName || '';
-    this.authUser = user;
-    this.currentStep = 2;
+        // Email is available, proceed
+        this.form.email = user.email || '';
+        this.form.fullName = user.displayName || '';
+        this.authUser = user;
+        this.currentStep = 2;
 
-  } catch (error) {
-    console.error('Google sign-in error:', error);
-    this.error = this.getErrorMessage(error);
-  } finally {
-    this.isLoading = false;
-  }
-},
+      } catch (error) {
+        console.error('Google sign-in error:', error);
+        this.error = this.getErrorMessage(error);
+      } finally {
+        this.isLoading = false;
+      }
+    },
     
     async completeRegistration() {
       this.isLoading = true;
@@ -292,8 +306,17 @@ export default {
         // Store additional user data in Firestore
         await this.storeUserData(this.authUser.uid, formattedPhone);
         
+        // Sign out the newly registered user
+        await signOut(this.registrationAuth);
+        this.authUser = null;
+        
         // Move to success step
         this.currentStep = 3;
+        
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          this.router.push('/admin/login');
+        }, 2000);
       } catch (error) {
         console.error('Profile completion error:', error);
         this.error = this.getErrorMessage(error);

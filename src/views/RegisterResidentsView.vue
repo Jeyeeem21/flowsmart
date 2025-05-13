@@ -189,9 +189,10 @@
 </template>
 
 <script>
-import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, connectAuthEmulator, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
+import { initializeApp } from 'firebase/app';
 
 export default {
   name: 'ResidentRegistration',
@@ -213,8 +214,21 @@ export default {
       showPassword: false,
       isLoading: false,
       error: null,
-      authUser: null
+      authUser: null,
+      registrationAuth: null
     };
+  },
+  created() {
+    // Create a separate auth instance for registration
+    const app = initializeApp({
+      apiKey: "AIzaSyCvZ17lpBTZUWZmgbU1UyVuAEK9ZgjOrOg",
+      authDomain: "flowsmart3x.firebaseapp.com",
+      projectId: "flowsmart3x",
+      storageBucket: "flowsmart3x.firebasestorage.app",
+      messagingSenderId: "902141727005",
+      appId: "1:902141727005:web:68c6771967cda2b113d1f4"
+    }, 'registration');
+    this.registrationAuth = getAuth(app);
   },
   methods: {
     async registerWithEmail() {
@@ -222,9 +236,9 @@ export default {
       this.error = null;
       
       try {
-        const auth = getAuth();
+        // Use the separate auth instance for registration
         const { user } = await createUserWithEmailAndPassword(
-          auth, 
+          this.registrationAuth, 
           this.form.email, 
           this.form.password
         );
@@ -245,9 +259,9 @@ export default {
       this.error = null;
       
       try {
-        const auth = getAuth();
+        // Use the separate auth instance for Google sign-in
         const provider = new GoogleAuthProvider();
-        const { user } = await signInWithPopup(auth, provider);
+        const { user } = await signInWithPopup(this.registrationAuth, provider);
         
         // Pre-fill form with data from Google account
         this.form.email = user.email || '';
@@ -279,8 +293,17 @@ export default {
         // Store additional user data in Firestore
         await this.storeUserData(this.authUser.uid, formattedPhone);
         
+        // Sign out the newly registered user
+        await signOut(this.registrationAuth);
+        this.authUser = null;
+        
         // Move to success step
         this.currentStep = 3;
+        
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          this.router.push('/login');
+        }, 2000);
       } catch (error) {
         console.error('Profile completion error:', error);
         this.error = this.getErrorMessage(error);

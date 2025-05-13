@@ -110,8 +110,9 @@ export default {
             router.push('/login');
           }
         } else {
-          // If user document doesn't exist, redirect to profile setup
-          router.push('/complete-profile');
+          // If user document doesn't exist, sign them out and show error
+          await auth.signOut();
+          error.value = 'This account is not registered. Please register first.';
         }
       } catch (err) {
         console.error("Error checking user role:", err);
@@ -129,13 +130,16 @@ export default {
       } catch (err) {
         switch(err.code) {
           case 'auth/user-not-found':
-            error.value = 'No user found with this email address';
+            error.value = 'No account found with this email. Please register to create an account.';
             break;
           case 'auth/wrong-password':
             error.value = 'Incorrect password';
             break;
           case 'auth/too-many-requests':
             error.value = 'Account temporarily locked due to too many failed attempts';
+            break;
+          case 'auth/invalid-email':
+            error.value = 'Please enter a valid email address';
             break;
           default:
             error.value = 'Failed to sign in. Please try again.';
@@ -153,6 +157,17 @@ export default {
       try {
         const provider = new GoogleAuthProvider();
         const userCredential = await signInWithPopup(auth, provider);
+        
+        // Check if user exists in Firestore
+        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+        
+        if (!userDoc.exists()) {
+          // If user doesn't exist in Firestore, sign them out and show error
+          await auth.signOut();
+          error.value = 'No account found with this Google email. Please register first.';
+          return;
+        }
+        
         await redirectBasedOnRole(userCredential.user);
       } catch (err) {
         if (err.code === 'auth/popup-closed-by-user') {
