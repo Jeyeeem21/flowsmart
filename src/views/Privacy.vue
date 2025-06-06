@@ -106,7 +106,7 @@
           <ul class="list-none space-y-4 text-gray-600 text-base sm:text-lg">
             <li class="flex items-center">
               <i class="fas fa-envelope mr-3 text-green-500"></i>
-              <strong>Email</strong>: <a href="mailto:support@watermeter.app" class="text-blue-500 hover:underline transition-colors duration-200 ml-2">support@watermeter.app</a>
+              <strong>Email</strong>: <a href="mailto:support@watermeter.app" class="text-blue-500 hover:underline transition-colors duration-200 ml-2">jmpagaran24@gmail.com</a>
             </li>
             <li class="flex items-center">
               <i class="fas fa-phone mr-3 text-green-500"></i>

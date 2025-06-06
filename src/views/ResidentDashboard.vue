@@ -12,7 +12,7 @@
       <!-- Top Header -->
       <div class="top-header">
         <h2>Analytics</h2>
-        <p class="realtime-date">  {{ currentDate }}</p>
+        <p class="realtime-date">{{ currentDate }}</p>
       </div>
 
       <!-- Cards Row -->
@@ -21,21 +21,28 @@
           <h3>Water Quality</h3>
           <p><strong>TDS:</strong> {{ latestData.tds_ppm }} ppm <span class="status">({{ tdsStatus }})</span></p>
           <p><strong>Conductivity:</strong> {{ latestData.us_cm }} µS/cm</p>
+          <p><strong>pH:</strong> {{ latestData.ph || 'N/A' }} <span class="status">({{ phStatus }})</span></p>
         </div>
         <div class="usage-card">
-          <h3>Daily Usage</h3>
+          <h3>Average Daily Usage</h3>
           <p><strong>Liters:</strong> {{ todayTotal.liters.toFixed(2) }} liters</p>
           <p><strong>Cubic Meters:</strong> {{ todayTotal.cubic.toFixed(4) }} m³</p>
         </div>
         <div class="usage-card">
-          <h3>Monthly Usage</h3>
+          <h3>Average Monthly Usage</h3>
           <p><strong>Liters:</strong> {{ monthlyTotal.liters.toFixed(2) }} liters</p>
           <p><strong>Cubic Meters:</strong> {{ monthlyTotal.cubic.toFixed(4) }} m³</p>
         </div>
         <div class="usage-card">
-          <h3>Yearly Usage</h3>
+          <h3>Average Yearly Usage</h3>
           <p><strong>Liters:</strong> {{ yearlyTotal.liters.toFixed(2) }} liters</p>
           <p><strong>Cubic Meters:</strong> {{ yearlyTotal.cubic.toFixed(4) }} m³</p>
+        </div>
+        <div class="usage-card total-cubic">
+          <h3>Total Cubic Usage</h3>
+         
+          <p><strong>Liters:</strong> {{ (totalCubicUsage * 1000).toFixed(2) }} liters</p>
+           <p><strong>Cubic Meters:</strong> {{ totalCubicUsage.toFixed(4) }} m³</p>
         </div>
       </div>
 
@@ -120,6 +127,39 @@
           </div>
         </div>
       </div>
+
+    </div>
+
+    <!-- Add the alert modal -->
+    <div v-if="showAlert" class="alert-modal-overlay">
+      <div class="alert-modal">
+        <div class="alert-header">
+          <i class="fas fa-exclamation-triangle"></i>
+          <h3>High Water Usage Alert</h3>
+        </div>
+        <div class="alert-content">
+          <p>Your water usage has exceeded the daily threshold!</p>
+          <div class="usage-details">
+            <div class="usage-item">
+              <span class="label">Current Usage:</span>
+              <span class="value">{{ currentUsage.toFixed(2) }} m³</span>
+            </div>
+            <div class="usage-item">
+              <span class="label">Daily Threshold:</span>
+              <span class="value">{{ thresholdValue.toFixed(2) }} m³</span>
+            </div>
+          </div>
+          <div class="alert-message">
+            <i class="fas fa-info-circle"></i>
+            <p>Please check for any water leaks or unnecessary water consumption.</p>
+          </div>
+        </div>
+        <div class="alert-footer">
+          <button @click="dismissAlert" class="dismiss-button">
+            <i class="fas fa-check"></i> Acknowledge
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -127,7 +167,7 @@
 <script>
 import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue';
 import { auth, db } from '@/firebase/config';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import Chart from 'chart.js/auto';
 
 export default {
@@ -138,9 +178,11 @@ export default {
     const monthlyChartData = ref([]);
     const yearlyChartData = ref([]);
     const totalUsage = ref(0);
-    const latestData = ref({ tds_ppm: 0, us_cm: 0 });
+    const totalCubicUsage = ref(0);
+    const latestData = ref({ tds_ppm: 0, us_cm: 0, ph: 0 });
     const tdsStatus = ref('safe');
     const tdsStatusClass = ref('status-safe');
+    const phStatus = ref('Neutral');
     const todayTotal = ref({ liters: 0, cubic: 0 });
     const monthlyTotal = ref({ liters: 0, cubic: 0 });
     const yearlyTotal = ref({ liters: 0, cubic: 0 });
@@ -161,8 +203,12 @@ export default {
     const dailyChartContainer = ref(null);
     const monthlyChartContainer = ref(null);
     const yearlyChartContainer = ref(null);
-   const currentDate = ref(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+    const currentDate = ref(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
     const refreshInterval = ref(null);
+    const checkInterval = ref(null);
+    const showAlert = ref(false);
+    const currentUsage = ref(0);
+    const thresholdValue = ref(0);
 
     // Update real-time date
     const updateCurrentDate = () => {
@@ -207,49 +253,60 @@ export default {
         }
 
         const q = query(collection(db, 'SensorData'), where('id', '==', deviceId));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          error.value = `No sensor data found for device ID: ${deviceId}`;
-          sensorDataList.value = [];
-          dailyChartData.value = [];
-          monthlyChartData.value = [];
-          yearlyChartData.value = [];
-          availableYears.value = [];
-          return;
-        }
-
-        sensorDataList.value = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          const isValidTimestamp = typeof data.timestamp === 'string' && !isNaN(new Date(data.timestamp).getTime());
-          const isValidLiters = typeof data.liters === 'number' && !isNaN(data.liters);
-          const isValidTds = typeof data.tds_ppm === 'number' && !isNaN(data.tds_ppm);
-          const isValidUsCm = typeof data.us_cm === 'number' && !isNaN(data.us_cm);
-          if (!isValidTimestamp || !isValidLiters || !isValidTds || !isValidUsCm) {
-            console.warn('Invalid sensor data:', data);
-            return null;
+        
+        // Set up real-time listener
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          if (querySnapshot.empty) {
+            error.value = `No sensor data found for device ID: ${deviceId}`;
+            sensorDataList.value = [];
+            dailyChartData.value = [];
+            monthlyChartData.value = [];
+            yearlyChartData.value = [];
+            availableYears.value = [];
+            return;
           }
-          return {
-            id: data.id,
-            liters: data.liters,
-            tds_ppm: data.tds_ppm,
-            us_cm: data.us_cm,
-            timestamp: data.timestamp,
-          };
-        }).filter(data => data !== null);
 
-        const years = [...new Set(sensorDataList.value.map(data => new Date(data.timestamp).getFullYear()))];
-        availableYears.value = years.sort((a, b) => b - a);
+          sensorDataList.value = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            const isValidTimestamp = typeof data.timestamp === 'string' && !isNaN(new Date(data.timestamp).getTime());
+            const isValidLiters = typeof data.liters === 'number' && !isNaN(data.liters);
+            const isValidTds = typeof data.tds_ppm === 'number' && !isNaN(data.tds_ppm);
+            const isValidUsCm = typeof data.us_cm === 'number' && !isNaN(data.us_cm);
+            const isValidPh = data.ph === undefined || (typeof data.ph === 'number' && !isNaN(data.ph));
+            if (!isValidTimestamp || !isValidLiters || !isValidTds || !isValidUsCm || !isValidPh) {
+              console.warn('Invalid sensor data:', data);
+              return null;
+            }
+            return {
+              id: data.id,
+              liters: data.liters,
+              tds_ppm: data.tds_ppm,
+              us_cm: data.us_cm,
+              ph: data.ph,
+              timestamp: data.timestamp,
+            };
+          }).filter(data => data !== null);
 
-        if (availableYears.value.length > 0) {
-          selectedYear.value = availableYears.value[0];
-        } else {
-          selectedYear.value = new Date().getFullYear();
-        }
+          const years = [...new Set(sensorDataList.value.map(data => new Date(data.timestamp).getFullYear()))];
+          availableYears.value = years.sort((a, b) => b - a);
 
-        updateChartData();
+          if (availableYears.value.length > 0) {
+            selectedYear.value = availableYears.value[0];
+          } else {
+            selectedYear.value = new Date().getFullYear();
+          }
+
+          updateChartData();
+          checkThreshold(); // Check threshold whenever new data arrives
+        }, (error) => {
+          console.error('Error in real-time listener:', error);
+          error.value = 'Failed to load sensor data: ' + error.message;
+        });
+
+        // Store the unsubscribe function to clean up later
+        return unsubscribe;
       } catch (err) {
-        console.error('Error fetching sensor data:', err.message, err.code);
+        console.error('Error setting up real-time listener:', err.message, err.code);
         error.value = 'Failed to load sensor data: ' + err.message;
       }
     };
@@ -257,12 +314,14 @@ export default {
     // Update chart data
     const updateChartData = () => {
       totalUsage.value = sensorDataList.value.reduce((sum, data) => sum + data.liters, 0) * (unit.value === 'cubic' ? 0.001 : 1);
+      totalCubicUsage.value = sensorDataList.value.reduce((sum, data) => sum + data.liters, 0) / 1000;
 
       const sortedData = sensorDataList.value.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       if (sortedData.length > 0) {
         latestData.value = {
           tds_ppm: sortedData[0].tds_ppm,
-          us_cm: sortedData[0].us_cm
+          us_cm: sortedData[0].us_cm,
+          ph: sortedData[0].ph
         };
         if (latestData.value.tds_ppm > 300) {
           tdsStatus.value = 'contaminated';
@@ -273,6 +332,11 @@ export default {
         } else {
           tdsStatus.value = 'safe';
           tdsStatusClass.value = 'status-safe';
+        }
+        if (latestData.value.ph) {
+          if (latestData.value.ph > 7) phStatus.value = 'Alkaline';
+          else if (latestData.value.ph >= 6.5) phStatus.value = 'Neutral';
+          else phStatus.value = 'Acidic';
         }
       }
 
@@ -414,8 +478,10 @@ export default {
 
       const isMobile = window.innerWidth <= 768;
       const isYearly = label.includes('Yearly');
+      const isBar = isYearly;
+
       chartInstanceRef.value = new Chart(ctx, {
-        type: isYearly ? 'bar' : 'line',
+        type: isBar ? 'bar' : 'line',
         data: {
           labels: data.value.map(([k]) => {
             if (label.includes('Daily')) {
@@ -431,11 +497,14 @@ export default {
           datasets: [{
             label: `${label} Usage`,
             data: data.value.map(([, v]) => v),
-            backgroundColor: isYearly ? 'rgba(76, 175, 80, 0.8)' : 'rgba(76, 175, 80, 0.5)',
+            backgroundColor: isBar ? 'rgba(76, 175, 80, 0.8)' : 'rgba(76, 175, 80, 0.2)',
             borderColor: 'rgba(76, 175, 80, 1)',
-            borderWidth: isYearly ? 1 : 2,
-            fill: isYearly ? false : true,
-            tension: isYearly ? 0 : 0.4,
+            borderWidth: isBar ? 1 : 2,
+            fill: isBar ? false : {
+              target: 'origin',
+              above: 'rgba(76, 175, 80, 0.1)'
+            },
+            tension: isBar ? 0 : 0.4,
           }],
         },
         options: {
@@ -531,14 +600,13 @@ export default {
     });
 
     // Lifecycle hooks
-   onMounted(() => {
+    onMounted(() => {
       fetchUserData();
       updateCurrentDate();
       const dateIntervalId = setInterval(updateCurrentDate, 1000 * 60 * 60 * 24); // Update daily
-      startAutoRefresh();
+      
       return () => {
         clearInterval(dateIntervalId);
-        stopAutoRefresh();
       };
     });
 
@@ -546,8 +614,89 @@ export default {
       if (dailyChartInstance.value) dailyChartInstance.value.destroy();
       if (monthlyChartInstance.value) monthlyChartInstance.value.destroy();
       if (yearlyChartInstance.value) yearlyChartInstance.value.destroy();
-      stopAutoRefresh(); // Ensure cleanup
     });
+
+    const checkThreshold = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          console.log('No authenticated user found');
+          return;
+        }
+
+        // Get user data
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists()) {
+          console.log('User document does not exist');
+          return;
+        }
+        
+        const userData = userDoc.data();
+        const deviceId = userData.deviceId;
+        console.log('User device ID:', deviceId);
+
+        if (!deviceId) {
+          console.log('No device ID found for user');
+          return;
+        }
+
+        // Get threshold settings
+        const thresholdDoc = await getDoc(doc(db, 'threshold', user.uid));
+        if (!thresholdDoc.exists()) {
+          console.log('Threshold document does not exist');
+          return;
+        }
+        
+        const threshold = thresholdDoc.data();
+        console.log('Threshold settings:', threshold);
+
+        if (!threshold.notifyOnThreshold) {
+          console.log('Threshold notifications are disabled');
+          return;
+        }
+
+        if (typeof threshold.dailyThresholdCubicMeters !== 'number') {
+          console.log('Invalid threshold value');
+          return;
+        }
+
+        // Get today's usage
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Calculate current usage from sensorDataList
+        const totalUsage = sensorDataList.value
+          .filter(data => {
+            const timestamp = new Date(data.timestamp);
+            return timestamp >= today && typeof data.liters === 'number';
+          })
+          .reduce((sum, data) => sum + data.liters, 0);
+
+        const usageInCubicMeters = totalUsage / 1000;
+        console.log('Current usage:', usageInCubicMeters, 'm³');
+        console.log('Threshold:', threshold.dailyThresholdCubicMeters, 'm³');
+
+        // Show alert if threshold is exceeded
+        if (usageInCubicMeters >= threshold.dailyThresholdCubicMeters) {
+          console.log('Threshold exceeded! Showing alert...');
+          showThresholdAlert(usageInCubicMeters, threshold.dailyThresholdCubicMeters);
+        } else {
+          console.log('Usage is within threshold');
+        }
+      } catch (error) {
+        console.error('Error checking threshold:', error);
+      }
+    };
+
+    const dismissAlert = () => {
+      showAlert.value = false;
+    };
+
+    const showThresholdAlert = (usage, threshold) => {
+      currentUsage.value = usage;
+      thresholdValue.value = threshold;
+      showAlert.value = true;
+    };
 
     return {
       sensorDataList,
@@ -555,9 +704,11 @@ export default {
       monthlyChartData,
       yearlyChartData,
       totalUsage,
+      totalCubicUsage,
       latestData,
       tdsStatus,
       tdsStatusClass,
+      phStatus,
       todayTotal,
       monthlyTotal,
       yearlyTotal,
@@ -575,6 +726,11 @@ export default {
       monthlyChartContainer,
       yearlyChartContainer,
       currentDate,
+      checkInterval,
+      showAlert,
+      currentUsage,
+      thresholdValue,
+      dismissAlert,
     };
   },
 };
@@ -647,7 +803,6 @@ export default {
   font-size: 0.9rem;
   color: var(--text-medium);
   margin: 0;
-  text-align: right;
 }
 
 /* Cards Row */
@@ -754,6 +909,19 @@ export default {
   color: var(--status-contaminated);
 }
 
+/* pH Status Colors 
+.status-acidic {
+  color: #d32f2f;
+}
+
+.status-neutral {
+  color: #ffc107;
+}*/
+
+.status-alkaline {
+  color: #4caf50;
+}
+
 /* Usage Card */
 .usage-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
@@ -808,6 +976,24 @@ export default {
   line-height: 1.3;
 }
 
+/* Total Cubic Card Special Styling */
+.total-cubic {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+  border-left: 4px solid #2e7d32;
+}
+
+.total-cubic h3::before {
+  content: '\f080';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: #2e7d32;
+  font-size: 0.9rem;
+}
+
+.total-cubic:hover {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.1));
+}
+
 /* Accent Line */
 .sensor-card::before,
 .usage-card::before {
@@ -844,7 +1030,7 @@ export default {
 }
 
 .unit-label {
-  margin-right: U+00A012px;
+  margin-right: 12px;
   font-weight: 500;
   color: #2c3e50;
   font-size: 0.9rem;
@@ -897,7 +1083,8 @@ export default {
 /* Chart Layout */
 .charts-row {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -913,6 +1100,13 @@ export default {
 
 .daily-chart-wrapper {
   max-width: 1200px;
+  flex: 1 1 100%;
+}
+
+.monthly-chart-wrapper,
+.yearly-chart-wrapper {
+  flex: 1 1 calc(50% - 0.5rem);
+  max-width: calc(50% - 0.5rem);
 }
 
 .chart-header {
@@ -997,9 +1191,7 @@ canvas {
 }
 
 .daily-chart-wrapper canvas {
-  min-height: 350px !important;
   max-height: 450px !important;
-  height: 450px !important;
 }
 
 .loading {
@@ -1009,13 +1201,13 @@ canvas {
   font-size: 0.9rem;
 }
 
-/* Desktop - Large (4 cards in a row) */
+/* Desktop - Large */
 @media (min-width: 992px) {
   .analytics-charts {
     padding: 1.5rem;
   }
   .cards-row {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 1.25rem;
   }
   .charts-row {
@@ -1030,30 +1222,26 @@ canvas {
     flex: 1 1 100%;
     max-width: 1200px;
   }
-  .chart-content {
-    min-height: 300px;
-    max-height: 350px;
+  .monthly-chart-wrapper,
+  .yearly-chart-wrapper {
+    flex: 1 1 calc(50% - 0.5rem);
+    max-width: calc(50% - 0.5rem);
   }
-  .daily-chart-wrapper .chart-content {
-    min-height: 400px;
+  .monthly-chart-wrapper .chart-content,
+  .yearly-chart-wrapper .chart-content {
+    min-height: 350px;
     max-height: 450px;
   }
-  .daily-chart-wrapper canvas {
+  .monthly-chart-wrapper canvas,
+  .yearly-chart-wrapper canvas {
     max-height: 450px !important;
-  }
-  .chart-controls select {
-    padding: 0.5rem 1rem;
-  }
-  .monthly-select {
-    padding: 0.3rem 0.5rem;
-    font-size: 0.8rem;
   }
 }
 
 /* Tablet - Medium */
 @media (min-width: 768px) and (max-width: 991.99px) {
   .cards-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 1rem;
   }
   .charts-row {
@@ -1068,30 +1256,26 @@ canvas {
     flex: 1 1 100%;
     max-width: 100%;
   }
-  .chart-content {
-    min-height: 300px;
-    max-height: 350px;
+  .monthly-chart-wrapper,
+  .yearly-chart-wrapper {
+    flex: 1 1 calc(50% - 0.5rem);
+    max-width: calc(50% - 0.5rem);
   }
-  .daily-chart-wrapper .chart-content {
-    min-height: 375px;
+  .monthly-chart-wrapper .chart-content,
+  .yearly-chart-wrapper .chart-content {
+    min-height: 300px;
     max-height: 400px;
   }
-  .daily-chart-wrapper canvas {
+  .monthly-chart-wrapper canvas,
+  .yearly-chart-wrapper canvas {
     max-height: 400px !important;
-  }
-  .chart-header h3 {
-    font-size: 1rem;
-  }
-  .monthly-select {
-    padding: 0.3rem 0.5rem;
-    font-size: 0.8rem;
   }
 }
 
 /* Mobile - Small Devices */
-@media (max-width: 575.98px) {
+@media (max-width: 767.99px) {
   .cards-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 0.75rem;
   }
   .sensor-card,
@@ -1120,6 +1304,18 @@ canvas {
     width: 100%;
     text-align: right;
   }
+  .charts-row {
+    flex-direction: column;
+  }
+  .chart-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  .monthly-chart-wrapper,
+  .yearly-chart-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
@@ -1147,8 +1343,6 @@ canvas {
   .monthly-select {
     width: 100%;
     max-width: 100px;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.8rem;
   }
   .chart-content {
     min-height: 300px;
@@ -1164,8 +1358,8 @@ canvas {
     height: 350px !important;
   }
   .unit-toggle {
-    width: 40%;
-    justify-content: space-between;
+    width: 45%;
+    justify-content: flex-end;
   }
   .toggle-button {
     padding: 6px 12px;
@@ -1205,12 +1399,152 @@ canvas {
     max-height: 320px !important;
     height: 320px !important;
   }
-  .chart-header h3 {
-    font-size: 1rem;
-  }
-  .monthly-select {
-    padding: 0.3rem 0.5rem;
-    font-size: 0.8rem;
-  }
+}
+
+/* Alert Modal Styles */
+.alert-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.alert-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideIn 0.3s ease-out;
+}
+
+.alert-header {
+  background: #f44336;
+  color: white;
+  padding: 1rem;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.alert-header i {
+  font-size: 1.5rem;
+}
+
+.alert-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.alert-content {
+  padding: 1.5rem;
+}
+
+.alert-content p {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.usage-details {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.usage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.usage-item:last-child {
+  margin-bottom: 0;
+}
+
+.usage-item .label {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.usage-item .value {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.alert-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #e3f2fd;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.alert-message i {
+  color: #1976d2;
+  font-size: 1.1rem;
+  margin-top: 0.1rem;
+}
+
+.alert-message p {
+  margin: 0;
+  color: #1976d2;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.alert-footer {
+  padding: 1rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dismiss-button {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.dismiss-button:hover {
+  background: #388e3c;
+}
+
+.dismiss-button i {
+  font-size: 0.9rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 </style>
+```

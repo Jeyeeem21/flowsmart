@@ -224,12 +224,12 @@ export default {
   created() {
     // Create a separate auth instance for registration
     const app = initializeApp({
-      apiKey: "AIzaSyCvZ17lpBTZUWZmgbU1UyVuAEK9ZgjOrOg",
-      authDomain: "flowsmart3x.firebaseapp.com",
-      projectId: "flowsmart3x",
-      storageBucket: "flowsmart3x.firebasestorage.app",
-      messagingSenderId: "902141727005",
-      appId: "1:902141727005:web:68c6771967cda2b113d1f4"
+      apiKey: process.env.VUE_APP_FIREBASE_API_KEY,
+      authDomain: process.env.VUE_APP_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.VUE_APP_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.VUE_APP_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.VUE_APP_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.VUE_APP_FIREBASE_APP_ID
     }, 'registration');
     this.registrationAuth = getAuth(app);
   },
@@ -273,6 +273,7 @@ export default {
 
         if (!snapshot.empty) {
           // Email already exists in Firestore
+          await signOut(this.registrationAuth);
           this.isLoading = false;
           return this.error = 'This email is already registered. Please use a different one or log in.';
         }
@@ -313,10 +314,7 @@ export default {
         // Move to success step
         this.currentStep = 3;
         
-        // Redirect to login page after a short delay
-        setTimeout(() => {
-          this.router.push('/admin/login');
-        }, 2000);
+        // Do not redirect; stay on the page to allow adding more accounts
       } catch (error) {
         console.error('Profile completion error:', error);
         this.error = this.getErrorMessage(error);
@@ -329,7 +327,7 @@ export default {
       try {
         const db = getFirestore();
         
-        // Create a document with the user's ID in the 'admins' collection
+        // Create a document with the user's ID in the 'users' collection
         await setDoc(doc(db, 'users', userId), {
           email: this.form.email,
           fullName: this.form.fullName,
@@ -388,7 +386,6 @@ export default {
       }
     },
     
-    // Replace goToDashboard with addMore
     addMore() {
       // Reset the form and go back to step 1
       this.resetForm();
@@ -397,7 +394,6 @@ export default {
       this.authUser = null;
     },
     
-    // Add resetForm method
     resetForm() {
       this.form = {
         email: '',

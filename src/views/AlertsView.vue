@@ -1,191 +1,150 @@
 <template>
-  <div class="relative container mx-auto p-2 sm:p-4 md:p-6 bg-white">
+  <div class="usage-report-container">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 
-    <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">Alerts</h1>
-    <!-- Full-Screen Loading Overlay -->
-    <div v-if="loading" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+    <h1 class="report-title">Alerts</h1>
 
-        <p class="mt-2 text-sm sm:text-base">Loading alerts...</p>
-   
+    <!-- Error Message -->
+    <div v-if="error" class="error-container">
+      <svg class="error-icon" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <p>{{ error }}</p>
+    </div>
+
+    <!-- Loading State -->
+    <div v-else-if="loading" class="loading" role="status">
+      Loading alerts...
     </div>
 
     <!-- Content -->
-    <div v-else>
-    
+    <div v-else class="report-content">
+      <!-- Tabs -->
+      
 
-      <!-- Error Message -->
-      <div v-if="error" class="bg-red-100 text-red-700 p-3 sm:p-4 rounded mb-4 text-sm sm:text-base">
-        {{ error }}
-      </div>
-
-      <!-- Alerts Table -->
-      <div v-if="paginatedData.length > 0" class="bg-white shadow-md rounded-lg overflow-hidden">
+      <!-- Billing Alerts -->
+      <div v-if="activeTab === 'billing'" class="table-wrapper">
         <!-- Search (Admin Only) -->
-        <div v-if="isAdmin" class="flex flex-col sm:flex-row justify-between items-center p-3 sm:p-4 border-b">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search by Device ID or User ID..."
-            class="w-full sm:w-1/3 p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
+        <div v-if="isAdmin" class="search-controls">
+          <div class="search-group">
+            <label class="search-label" for="device-search">Search by Device ID</label>
+            <input
+              id="device-search"
+              v-model="searchQuery"
+              type="text"
+              class="search-input"
+              placeholder="Enter device ID"
+              aria-label="Search by device ID "
+            />
+          </div>
         </div>
 
         <!-- Table -->
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
-                <th v-if="isAdmin" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liters</th>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cubic Consumed</th>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="alert in paginatedData" :key="alert.id">
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">{{ alert.month }}</td>
-                <td v-if="isAdmin" class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">{{ alert.deviceId }}</td>
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">{{ alert.totalLiters.toFixed(2) }}</td>
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">{{ alert.cubicMeters.toFixed(2) }} m³</td>
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">
-                  {{ alert.totalLiters === 0 ? 'No Consumption' : '₱ ' + alert.amount.toFixed(2) }}
-                </td>
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-900">{{ formatDueDate(alert.month) }}</td>
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm">
-                  <span :class="{
-                    'status-paid': alert.status === 'Paid',
-                    'status-pending': alert.status === 'Pending',
-                    'status-due': alert.status === 'Due'
-                  }">
-                    {{ alert.status }}
-                  </span>
-                </td>
-                <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm">
-                  <button
-                    @click="printBillingData(alert)"
-                    class="text-green-600 hover:text-green-800"
-                    title="Print Receipt"
-                  >
-                    <svg class="h-4 sm:h-5 w-4 sm:w-5 inline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 4h8a1 1 0 011 1v4a1 1 0 01-1 1H6a1 1 0 01-1-1V9a1 1 0 011-1zm1 1v4h6V9H7z" clip-rule="evenodd" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th v-if="isAdmin">Device ID</th>
+              <th>Liters</th>
+              <th>m³</th>
+              <th>Amount</th>
+              <th>Due Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="alert in paginatedBillingAlerts" :key="alert.id">
+              <td data-label="Month">{{ alert.month }}</td>
+              <td v-if="isAdmin" data-label="Device ID">{{ alert.deviceId }}</td>
+              <td data-label="Liters">{{ alert.totalLiters.toFixed(2) }}</td>
+              <td data-label="m³">{{ alert.cubicMeters.toFixed(2) }}</td>
+              <td data-label="Amount">₱ {{ alert.amount.toFixed(2) }}</td>
+              <td data-label="Due Date">{{ formatDueDate(alert.month) }}</td>
+              <td data-label="Status">
+                <span class="status-due">Due</span>
+              </td>
+            </tr>
+            <tr v-if="filteredBillingAlerts.length === 0">
+              <td :colspan="isAdmin ? 7 : 6" class="no-data">No billing alerts found.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-        <!-- Pagination -->
-        <div class="flex flex-col sm:flex-row justify-between items-center p-3 sm:p-4">
-          <div class="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-0">
-            Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to
-            {{ Math.min(currentPage * itemsPerPage, filteredData.length) }} of
-            {{ filteredData.length }} alerts
-          </div>
-          <div class="flex flex-wrap gap-1 sm:gap-2">
-            <button
-              @click="currentPage = 1"
-              :disabled="currentPage === 1"
-              class="px-2 sm:px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 text-xs sm:text-sm"
-            >
-              First
-            </button>
-            <button
-              @click="currentPage--"
-              :disabled="currentPage === 1"
-              class="px-2 sm:px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 text-xs sm:text-sm"
-            >
-              Previous
-            </button>
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="pagination-controls" role="navigation" aria-label="Pagination">
+        <div class="pagination-toggle">
+          <button
+            class="pagination-button"
+            :disabled="currentPage === 1"
+            @click="prevPage"
+            aria-label="Previous page"
+          >
+            <i class="fas fa-chevron-left"></i> Prev
+          </button>
+          <div class="page-numbers">
             <button
               v-for="page in visiblePages"
               :key="page"
+              class="page-number"
+              :class="{ active: currentPage === page }"
               @click="currentPage = page"
-              :class="{
-                'px-2 sm:px-3 py-1 rounded text-xs sm:text-sm': true,
-                'bg-green-500 text-white': currentPage === page,
-                'bg-gray-200 hover:bg-gray-300': currentPage !== page
-              }"
+              :aria-label="`Go to page ${page}`"
+              :aria-current="currentPage === page ? 'page' : null"
             >
               {{ page }}
             </button>
-            <button
-              v-if="showEllipsis"
-              class="px-2 sm:px-3 py-1 bg-gray-200 rounded text-xs sm:text-sm"
-              disabled
-            >
-              ...
-            </button>
-            <button
-              @click="currentPage++"
-              :disabled="currentPage === totalPages"
-              class="px-2 sm:px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 text-xs sm:text-sm"
-            >
-              Next
-            </button>
-            <button
-              @click="currentPage = totalPages"
-              :disabled="currentPage === totalPages"
-              class="px-2 sm:px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 text-xs sm:text-sm"
-            >
-              Last
-            </button>
+            <span v-if="showEllipsis" class="ellipsis">...</span>
           </div>
+          <button
+            class="pagination-button"
+            :disabled="currentPage === totalPages"
+            @click="nextPage"
+            aria-label="Next page"
+            title="Go to the next page"
+          >
+            Next <i class="fas fa-chevron-right"></i>
+          </button>
         </div>
       </div>
-
-      <!-- No Alerts -->
-      <div v-else class="bg-white shadow-md rounded-lg p-4 sm:p-6 text-center text-gray-600 text-sm sm:text-base">
-        No due bills found since May 2024.
+      <div v-if="totalPages > 0" class="pagination-info">
+        Page {{ currentPage }} of {{ totalPages }}
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { auth, db } from '@/firebase/config';
-import { doc, getDoc, collection, query, getDocs, where } from 'firebase/firestore';
+import { doc, getDoc, collection, query, getDocs, where, onSnapshot } from 'firebase/firestore';
 
 export default {
-  name: 'AlertView',
+  name: 'AlertsView',
   setup() {
-    const alertsData = ref([]);
+    const billingAlerts = ref([]);
     const error = ref(null);
     const loading = ref(true);
     const isAdmin = ref(false);
     const userDeviceId = ref(null);
-    const userId = ref(null);
-    const currentPage = ref(1);
-    const itemsPerPage = 5;
-    const settings = ref({});
+    const activeTab = ref('billing');
     const searchQuery = ref('');
+    const settings = ref({});
+
+    // Pagination state
+    const currentPage = ref(1);
+    const itemsPerPage = 5; // You can adjust this value
 
     // Fetch settings from Settings/global
     const fetchSettings = async () => {
       try {
         const settingsDoc = await getDoc(doc(db, 'Settings', 'global'));
         if (settingsDoc.exists()) {
-          settings.value = {
-            billingRate: settingsDoc.data().billingRate || 110,
-            monthlyQuotaCubicMeters: settingsDoc.data().monthlyQuotaCubicMeters || 12,
-            pricePerCubicMeterAboveQuota: settingsDoc.data().pricePerCubicMeterAboveQuota || 25,
-            billingCalculationDate: settingsDoc.data().billingCalculationDate || 4,
-            dueDateDays: settingsDoc.data().dueDateDays || 2
-          };
+          settings.value = settingsDoc.data();
         } else {
-          settings.value = {
-            billingRate: 110,
-            monthlyQuotaCubicMeters: 12,
-            pricePerCubicMeterAboveQuota: 25,
-            billingCalculationDate: 4,
-            dueDateDays: 2
-          };
+           console.warn('Settings document not found in Firestore.');
         }
       } catch (err) {
         console.error('Error fetching settings:', err);
@@ -200,17 +159,39 @@ export default {
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
       ].indexOf(monthName);
+       if (monthIndex === -1) {
+        console.error('Invalid month name:', monthName);
+        return 'Invalid Date';
+      }
       const currentYear = parseInt(year);
-      const billingDate = new Date(currentYear, monthIndex, settings.value.billingCalculationDate);
+      // Use settings for billing calculation date and due date days, default to reasonable values
+      const billingDate = new Date(currentYear, monthIndex, settings.value.billingCalculationDate || 4);
       const dueDate = new Date(billingDate);
-      dueDate.setDate(billingDate.getDate() + settings.value.dueDateDays);
+      dueDate.setDate(billingDate.getDate() + (settings.value.dueDateDays || 2));
       return dueDate;
     };
 
     // Format due date for display
     const formatDueDate = (monthYear) => {
       const dueDate = calculateDueDate(monthYear);
+       if (dueDate === 'Invalid Date' || isNaN(dueDate)) {
+         return 'N/A';
+       }
       return dueDate.toLocaleDateString('en-PH', { day: '2-digit', month: 'long', year: 'numeric' });
+    };
+
+    // Format date for display (still needed for potential other date displays, though threshold removed)
+    const formatDate = (timestamp) => {
+      if (!timestamp) return 'N/A';
+      // Check if timestamp is a Firestore Timestamp or a Date object
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString('en-PH', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     };
 
     // Fetch user data and determine role
@@ -219,103 +200,57 @@ export default {
         const user = auth.currentUser;
         if (!user) {
           error.value = 'Please sign in to view alerts.';
+          loading.value = false;
           return;
         }
-        userId.value = user.uid;
-        await fetchSettings();
+
+        await fetchSettings(); // Fetch settings before setting up listeners
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
           isAdmin.value = userData.role === 'admin';
           userDeviceId.value = userData.deviceId || null;
-          await fetchAlertsData();
+          setupRealtimeListeners();
         } else {
           error.value = 'User profile not found.';
+          loading.value = false;
         }
       } catch (err) {
         error.value = `Failed to load user data: ${err.message}.`;
         console.error('Error fetching user data:', err);
-      } finally {
         loading.value = false;
       }
     };
 
-    // Fetch alerts (due bills since May 2024 with due dates from current month onward)
-    const fetchAlertsData = async () => {
-      try {
-        loading.value = true;
-        alertsData.value = [];
-
-        // Define time range: May 2024 to May 2025
-        const startDate = new Date(2024, 4, 1); // May 1, 2024
-        const endDate = new Date(2025, 4, 5); // May 5, 2025 (current date)
-        const currentMonthStart = new Date(2025, 4, 1); // Start of May 2025
-
-        // Query bills with status "Due"
-        const q = query(
+    // Setup realtime listener for billing alerts
+    const setupRealtimeListeners = () => {
+      // Billing alerts listener
+      const billingQuery = query(
           collection(db, 'Billing'),
-          where('status', '==', 'Due'),
-          where('timestamp', '>=', startDate),
-          where('timestamp', '<=', endDate)
-        );
-        const querySnapshot = await getDocs(q);
+        where('status', '==', 'Due')
+        // Removed threshold alerts listener
+      );
 
-        alertsData.value = querySnapshot.docs
+      onSnapshot(billingQuery, (snapshot) => {
+        billingAlerts.value = snapshot.docs
           .map(doc => {
             const data = doc.data();
-            const isValid =
-              typeof data.deviceId === 'string' &&
-              typeof data.month === 'string' &&
-              typeof data.cubicMeters === 'number' && !isNaN(data.cubicMeters) &&
-              typeof data.amount === 'number' && !isNaN(data.amount) &&
-              data.status === 'Due' &&
-              typeof data.userId === 'string';
-            if (!isValid) {
-              console.warn(`Invalid billing data for ${doc.id}:`, data);
-              return null;
-            }
-
-            const dueDate = calculateDueDate(data.month);
-            // Only include bills with due date on or after the current month
-            if (dueDate < currentMonthStart) {
-              return null;
-            }
-
             return {
               id: doc.id,
-              deviceId: data.deviceId,
-              month: data.month,
-              cubicMeters: data.cubicMeters,
-              totalLiters: data.totalLiters || 0,
-              pastCubics: data.pastCubics || 0,
-              currentCubics: data.currentCubics || data.cubicMeters || 0,
-              amount: data.amount,
-              status: data.status,
-              userId: data.userId,
-              accountNumber: data.accountNumber || 'N/A',
-              address: data.address || 'N/A',
-              contactNumber: data.contactNumber || 'N/A',
-              email: data.email || 'N/A',
-              fullName: data.fullName || 'N/A',
-              timestamp: data.timestamp.toDate() || new Date(data.month.split(' ')[1], [
-                'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'
-              ].indexOf(data.month.split(' ')[0]))
+              ...data,
+              timestamp: data.timestamp?.toDate() || new Date() // Ensure timestamp is a Date object
             };
           })
-          .filter(data => data !== null)
-          .filter(data => isAdmin.value || data.deviceId === userDeviceId.value);
-
-        console.log(`Fetched ${alertsData.value.length} due bills since May 2024 with due dates from May 2025 onward`);
-      } catch (err) {
-        console.error('Error fetching alerts data:', err);
-        error.value = `Failed to fetch alerts: ${err.message}.`;
-      } finally {
+          .filter(alert => (isAdmin.value || alert.deviceId === userDeviceId.value)); // Keep all billing alerts for now, filter no consumption later
+           loading.value = false;
+      }, (err) => {
+        console.error('Error fetching billing alerts:', err);
+        error.value = `Failed to fetch billing alerts: ${err.message}.`;
         loading.value = false;
-      }
+      });
     };
 
-    // Print billing data (receipt)
+    // Print billing data (receipt) - Kept the function but it won't be accessible from the UI
     const printBillingData = (alert) => {
       const printWindow = window.open('', '_blank');
       const currentDate = new Date().toLocaleDateString('en-PH', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -324,7 +259,7 @@ export default {
         <div class="company-info">
           <strong>LABASAN WATERWORKS AND SANITATION ASSOCIATION INC.</strong><br>
           Labasan 5211 Bongabong, Oriental Mindoro, Philippines<br>
-          TIN: 008-969-632-000<br>
+          TIN: ${settings.value.tin || 'N/A'}<br>
           Receipt No: ${alert.id}
         </div>
       `;
@@ -343,10 +278,10 @@ export default {
         <tr><td>Month</td><td>${alert.month}</td></tr>
         <tr><td>Device ID</td><td>${isAdmin.value ? alert.deviceId : 'N/A'}</td></tr>
         <tr><td>Total Liters</td><td>${alert.totalLiters.toFixed(2)}</td></tr>
-        <tr><td>Past Cubics</td><td>${alert.pastCubics.toFixed(2)} m³</td></tr>
-        <tr><td>Current Cubics</td><td>${alert.currentCubics.toFixed(2)} m³</td></tr>
+        <tr><td>Past Cubics</td><td>${alert.pastCubics?.toFixed(2) || '0.00'} m³</td></tr>
+        <tr><td>Current Cubics</td><td>${alert.currentCubics?.toFixed(2) || '0.00'} m³</td></tr>
         <tr><td>Cubic Consumed</td><td>${alert.cubicMeters.toFixed(2)} m³</td></tr>
-        <tr><td>Amount</td><td>${alert.totalLiters === 0 ? 'No Consumption' : '₱ ' + alert.amount.toFixed(2)}</td></tr>
+        <tr><td>Amount</td><td>₱ ${alert.amount.toFixed(2)}</td></tr>
         <tr><td>Due Date</td><td>${dueDate}</td></tr>
         <tr><td>Status</td><td>${alert.status}</td></tr>
       `;
@@ -431,97 +366,550 @@ export default {
       printWindow.print();
     };
 
-    // Filtered and processed data
-    const filteredData = computed(() => {
-      if (!searchQuery.value.trim() || !isAdmin.value) return alertsData.value;
-      const query = searchQuery.value.toLowerCase();
-      return alertsData.value.filter(
-        alert => alert.deviceId.toLowerCase().includes(query) || alert.userId.toLowerCase().includes(query)
+    // Filtered and Paginated data
+    const filteredBillingAlerts = computed(() => {
+      const query = searchQuery.value.trim().toLowerCase();
+      return billingAlerts.value.filter(
+        alert => 
+          (isAdmin.value || alert.deviceId === userDeviceId.value) && // Role-based filtering
+          alert.totalLiters > 0 && // Filter out no consumption
+          (!query || (alert.deviceId.toLowerCase().includes(query) || (alert.userId && alert.userId.toLowerCase().includes(query)))) // Search filtering
       );
     });
 
-    const processedData = computed(() => {
-      return filteredData.value
-        .map(alert => ({
-          ...alert,
-          timestamp: alert.timestamp instanceof Date ? alert.timestamp : new Date(alert.month.split(' ')[1], [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
-          ].indexOf(alert.month.split(' ')[0]))
-        }))
-        .sort((a, b) => b.timestamp - a.timestamp);
+     const totalPages = computed(() => {
+      return Math.ceil(filteredBillingAlerts.value.length / itemsPerPage);
     });
 
-    // Pagination logic
-    const totalPages = computed(() => Math.ceil(processedData.value.length / itemsPerPage));
-    const paginatedData = computed(() => {
+    const paginatedBillingAlerts = computed(() => {
       const start = (currentPage.value - 1) * itemsPerPage;
       const end = start + itemsPerPage;
-      return processedData.value.slice(start, end);
+      return filteredBillingAlerts.value.slice(start, end);
     });
-    const visiblePages = computed(() => {
-      const pages = [];
-      const maxVisible = 5;
-      let startPage = Math.max(1, currentPage.value - Math.floor(maxVisible / 2));
-      let endPage = Math.min(totalPages.value, startPage + maxVisible - 1);
-      if (endPage - startPage + 1 < maxVisible) {
-        startPage = Math.max(1, endPage - maxVisible + 1);
+
+    // Pagination methods
+    const nextPage = () => {
+      if (currentPage.value < totalPages.value) {
+        currentPage.value++;
       }
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i);
+    };
+
+    const prevPage = () => {
+      if (currentPage.value > 1) {
+        currentPage.value--;
       }
-      return pages;
+    };
+
+    // Total alerts count for sidebar (only billing alerts)
+    const totalAlertsCount = computed(() => filteredBillingAlerts.value.length);
+
+    // Watch for changes in total alerts count and emit to parent
+    watch(totalAlertsCount, (newCount) => {
+      // Emit event to update sidebar
+      window.dispatchEvent(new CustomEvent('update-alerts-count', { detail: newCount }));
     });
-    const showEllipsis = computed(() => totalPages.value > 5 && visiblePages.value[visiblePages.value.length - 1] < totalPages.value);
+    
+    // Reset pagination when search query changes
+    watch(searchQuery, () => {
+        currentPage.value = 1;
+    });
 
     onMounted(() => {
       fetchUserData();
+    });
+
+    // Computed property to determine which page numbers to show
+    const visiblePages = computed(() => {
+      const pages = [];
+      const total = totalPages.value;
+      const current = currentPage.value;
+      const maxVisible = 5; // Maximum number of visible page buttons (including ellipsis)
+
+      if (total <= maxVisible) {
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
+        }
+      } else {
+        const start = Math.max(2, current - 2);
+        const end = Math.min(total - 1, current + 2);
+
+        pages.push(1);
+
+        if (start > 2) {
+          pages.push('...');
+        }
+
+        for (let i = start; i <= end; i++) {
+          pages.push(i);
+        }
+
+        if (end < total - 1) {
+          pages.push('...');
+        }
+
+        pages.push(total);
+      }
+
+      return pages.filter((value, index, self) => self.indexOf(value) === index);
     });
 
     return {
       error,
       loading,
       isAdmin,
-      paginatedData,
+      activeTab,
+      billingAlerts, // Still return the original for completeness if needed elsewhere
+      filteredBillingAlerts, // Useful for showing total count before pagination
+      paginatedBillingAlerts, // Data for the current page
+      searchQuery,
+      printBillingData, // Still return the function even if not used in template
+      formatDueDate,
+      formatDate,
+      // Pagination properties and methods
       currentPage,
       totalPages,
-      visiblePages,
-      showEllipsis,
-      searchQuery,
-      filteredData,
-      printBillingData,
-      formatDueDate
+      nextPage,
+      prevPage,
+      visiblePages
     };
   }
 };
 </script>
 
 <style scoped>
-/* Tailwind CSS is assumed to be included globally */
-.status-paid {
-  color: #4caf50;
-  font-weight: 500;
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+:root {
+  --primary-color: #4caf50;
+  --secondary-color: #2c3e50;
+  --background-light: #f9f9f9;
+  --border-color: #e0e0e0;
+  --text-dark: #333;
+  --text-medium: #666;
+  --text-light: #888;
+  --status-safe: #4caf50;
+  --status-neutral: #ffc107;
+  --status-contaminated: #d32f2f;
 }
-.status-pending {
-  color: #ffc107;
-  font-weight: 500;
+
+* {
+  font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
 }
+
+.usage-report-container {
+  background: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow-x: hidden;
+}
+
+.report-title {
+  font-size: 1.25rem;
+  color: var(--secondary-color);
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.error-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: #ffebee;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.error-icon {
+  width: 24px;
+  height: 24px;
+  stroke: #c62828;
+  stroke-width: 2;
+  fill: none;
+}
+
+.loading {
+  text-align: center;
+  padding: 0.75rem;
+  color: var(--text-medium);
+  font-size: 0.8rem;
+}
+
+.alert-badge {
+  background-color: #d32f2f;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  margin-left: 6px;
+}
+
+/* Toggle Controls */
+/* Removed toggle controls styles */
+
+/* Search Controls */
+.search-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.search-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  flex: 1;
+}
+
+.search-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--secondary-color);
+  margin-bottom: 0.5rem;
+}
+
+.search-input {
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--background-light);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+}
+
+/* Table Wrapper */
+.table-wrapper {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(8px);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  border-left: 3px solid #388e3c;
+  position: relative;
+  overflow-x: auto;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.table-wrapper:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 3px 8px rgba(0, 0, 0, 0.1);
+}
+
+.table-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #388e3c, var(--secondary-color));
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+/* Table */
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.usage-table th {
+  font-size: 0.8rem;
+  color: var(--secondary-color);
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  background: var(--background-light);
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.usage-table td {
+  font-size: 0.75rem;
+  color: var(--text-dark);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.usage-table tr:hover {
+  background: rgba(76, 175, 80, 0.05);
+}
+
 .status-due {
-  color: #f44336;
+  color: #d32f2f;
   font-weight: 500;
 }
 
-.container{
-background-color : white;}
+.no-data {
+  text-align: center;
+  padding: 1rem;
+  color: var(--text-medium);
+  font-style: italic;
+}
 
+/* Pagination */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.5rem;
+}
 
-/* Ensure table is scrollable on mobile */
-@media (max-width: 640px) {
-  .overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
+.pagination-toggle {
+  display: flex;
+  align-items: center;
+  background-color: rgba(76, 175, 80, 0.1);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pagination-button {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  color: #555;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pagination-button.active {
+  color: white;
+  font-weight: 600;
+}
+
+.pagination-button.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #388e3c;
+  z-index: -1;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
+}
+
+.pagination-button:not(.active):hover:not(:disabled) {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+}
+
+.pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin: 0 6px;
+  flex-wrap: wrap;
+  color: #555;
+}
+
+.page-number {
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  color: #555;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  position: relative;
+  z-index: 1;
+}
+
+.page-number.active {
+  color: white;
+  font-weight: 600;
+}
+
+.page-number.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #388e3c;
+  z-index: -1;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
+}
+
+.page-number:not(.active):hover {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+}
+
+.ellipsis {
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  color: #666;
+  padding: 0 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.pagination-info {
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  color: #666;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .usage-report-container {
+    padding: 16px;
   }
-  table {
-    min-width: 600px; /* Ensure table is wide enough to require scrolling */
+
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+  }
+
+  /* Table to Card Layout */
+  .table-wrapper {
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .usage-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .usage-table thead {
+    display: none;
+  }
+
+  .usage-table tbody {
+    display: block;
+  }
+
+  .usage-table tr {
+    display: block;
+    background-color: white;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #eee;
+  }
+
+  .usage-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: none;
+    font-size: 0.9rem;
+    white-space: normal;
+    max-width: none;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+
+  .usage-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #666;
+    width: 40%;
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  .usage-table td:not(.actions-column) {
+    padding-right: 0;
+  }
+
+  .usage-table td.actions-column {
+    display: block;
+    margin-top: 12px;
+  }
+
+  .usage-table td[data-label="Month"]::before { content: "Month"; }
+  .usage-table td[data-label="Device ID"]::before { content: "Device ID"; }
+  .usage-table td[data-label="Liters"]::before { content: "Liters"; }
+  .usage-table td[data-label="m³"]::before { content: "m³"; }
+  .usage-table td[data-label="Amount"]::before { content: "Amount"; }
+  .usage-table td[data-label="Due Date"]::before { content: "Due Date"; }
+  .usage-table td[data-label="Status"]::before { content: "Status"; }
+
+  /* Pagination Mobile Styles */
+  .pagination-controls {
+    flex-direction: column;
+    align-items: center;
+    margin-top: 0.5rem;
+  }
+
+  .pagination-toggle {
+    width: 100%;
+    justify-content: space-between;
+    padding: 3px;
+  }
+
+  .pagination-button {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    gap: 0.3rem;
+  }
+
+  .page-number {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+  }
+
+  .pagination-info {
+    font-size: 0.65rem;
+    margin-top: 0.3rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .pagination-button {
+    padding: 3px 6px;
+    font-size: 0.6rem;
+  }
+
+  .page-number {
+    padding: 3px 6px;
+    font-size: 0.6rem;
+  }
+
+  .pagination-info {
+    font-size: 0.6rem;
   }
 }
 </style>

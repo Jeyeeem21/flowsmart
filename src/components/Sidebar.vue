@@ -145,6 +145,7 @@
                 <li class="sidebar-submenu-item" :class="{ active: activeItem === 'alerts' }">
                   <a href="#" class="sidebar-submenu-link" @click.prevent="setActiveItem('alerts')">
                     Alerts
+                    <span v-if="alertsCount > 0" class="alert-badge">{{ alertsCount }}</span>
                   </a>
                 </li>
               </ul>
@@ -348,7 +349,8 @@ export default {
       showMobileSubmenu: false,
       mobileSubmenuType: null,
       mobileSubmenuTitle: '',
-      userRole: 'resident' // Default to resident, will be updated in mounted
+      userRole: 'resident', // Default to resident, will be updated in mounted
+      alertsCount: 0
     };
   },
   computed: {
@@ -381,54 +383,54 @@ export default {
       }
     },
     setActiveItem(item) {
-  this.activeItem = item;
-  this.$emit('menu-selected', item);
-  switch (item) {
-    case 'dashboard':
-      this.$router.push(this.userRole === 'resident' ? '/residentdashboard' : '/dashboard');
-      break;
-    case 'adminData':
-      this.$router.push('/admin/data');
-      break;
-    case 'adminRegistration':
-      this.$router.push('/admin/register');
-      break;
-    case 'residentsData':
-      this.$router.push('/admin/residents');
-      break;
-    case 'registerResidents':
-      this.$router.push('/resident/register1');
-      break;
-    case 'deviceRegistration':
-      this.$router.push('/device/register');
-      break;
-    case 'deviceList':
-      this.$router.push('/device/list');
-      break;
-    case 'deviceStatus':
-      this.$router.push('/device/status');
-      break;
-    case 'usageReports':
-      this.$router.push('/reports/usage');
-      break;
-    case 'billing':
-      this.$router.push('/reports/billing');
-      break;
-    case 'alerts':
-      this.$router.push('/reports/alerts');
-      break;
-    case 'residentData':
-      this.$router.push('/reports/residents');
-      break;
-    case 'settings':
-      this.$router.push('/settings');
-      break;
-    case 'help':
-      this.$router.push('/help');
-      break;
-  }
-  this.closeMobileSubmenu();
-},
+      this.activeItem = item;
+      this.$emit('menu-selected', item);
+      switch (item) {
+        case 'dashboard':
+          this.$router.push(this.userRole === 'resident' ? '/residentdashboard' : '/dashboard');
+          break;
+        case 'adminData':
+          this.$router.push('/admin/data');
+          break;
+        case 'adminRegistration':
+          this.$router.push('/admin/register');
+          break;
+        case 'residentsData':
+          this.$router.push('/admin/residents');
+          break;
+        case 'registerResidents':
+          this.$router.push('/resident/register1');
+          break;
+        case 'deviceRegistration':
+          this.$router.push('/device/register');
+          break;
+        case 'deviceList':
+          this.$router.push('/device/list');
+          break;
+        case 'deviceStatus':
+          this.$router.push('/device/status');
+          break;
+        case 'usageReports':
+          this.$router.push('/reports/usage');
+          break;
+        case 'billing':
+          this.$router.push('/reports/billing');
+          break;
+        case 'alerts':
+          this.$router.push('/reports/alerts');
+          break;
+        case 'residentData':
+          this.$router.push('/reports/residents');
+          break;
+        case 'settings':
+          this.$router.push('/settings');
+          break;
+        case 'help':
+          this.$router.push('/help');
+          break;
+      }
+      this.closeMobileSubmenu();
+    },
     async logout() {
       try {
         const auth = getAuth();
@@ -488,6 +490,9 @@ export default {
       } catch (error) {
         console.error('Error fetching user role:', error);
       }
+    },
+    updateAlertsCount(event) {
+      this.alertsCount = event.detail;
     }
   },
   mounted() {
@@ -517,9 +522,13 @@ export default {
     
     // Fetch user role
     this.fetchUserRole();
+    
+    // Listen for alerts count updates
+    window.addEventListener('update-alerts-count', this.updateAlertsCount);
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkMobile);
+    window.removeEventListener('update-alerts-count', this.updateAlertsCount);
   }
 };
 </script>
@@ -677,6 +686,7 @@ export default {
   transition: all 0.2s ease;
   border-radius: 4px;
   font-size: 0.9rem;
+  position: relative;
 }
 .sidebar-submenu-link:hover {
   color: #4caf50;
@@ -854,5 +864,23 @@ export default {
   .main-content {
     padding-bottom: 75px; /* Add padding to account for mobile footer */
   }
+}
+
+.alert-badge {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: #ef4444;
+  color: white;
+  border-radius: 9999px;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 6px;
 }
 </style>

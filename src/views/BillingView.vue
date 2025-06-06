@@ -82,55 +82,61 @@
             </tr>
           </thead>
           <tbody>
-  <tr v-for="(bill, index) in paginatedData" :key="index">
-    <td>
-      <span v-if="isAdmin" class="month-admin">{{ bill.month.split(' ')[0] }}<br>{{ bill.month.split(' ')[1] }}</span>
-      <span v-else>{{ bill.month }}</span>
-    </td>
-    <td v-if="isAdmin">{{ bill.deviceId }}</td>
-    <td>{{ bill.totalLiters.toFixed(2) }}</td>
-    <td>{{ bill.cubicMeters.toFixed(2) }}</td>
-    <td>
-      <span v-if="bill.totalLiters === 0" class="no-consumption">No Consumption</span>
-      <span v-else>₱ {{ bill.amount.toFixed(2) }}</span>
-    </td>
-    <td>
-      <span
-        v-if="!isAdmin"
-        :class="{
-          'status-paid': bill.status === 'Paid',
-          'status-pending': bill.status === 'Pending',
-          'status-due': bill.status === 'Due'
-        }"
-      >
-        {{ bill.status }}
-      </span>
-      <select
-        v-else
-        v-model="bill.status"
-        @change="updateBillStatus(bill.id, $event.target.value)"
-        class="status-select"
-        :aria-label="`Update status for bill ${bill.month}`"
-      >
-        <option value="Pending">Pending</option>
-        <option value="Paid">Paid</option>
-        <option value="Due">Due</option>
-      </select>
-    </td>
-    <td>
-      <button
-        class="action-button print-button"
-        @click="printBillingData(bill)"
-        :aria-label="`Print bill for ${bill.month}`"
-      >
-        <i class="fas fa-print"></i> Print
-      </button>
-    </td>
-  </tr>
-  <tr v-if="paginatedData.length === 0">
-    <td :colspan="isAdmin ? 7 : 6" class="no-data">No billing data available.</td>
-  </tr>
-</tbody>
+            <tr v-for="(bill, index) in paginatedData" :key="index" :class="{ 'next-month-bill': bill.isNextMonth }">
+              <td>
+                <span v-if="isAdmin" class="month-admin">
+                  {{ bill.month.split(' ')[0] }}<br>{{ bill.month.split(' ')[1] }}
+                  <span v-if="bill.isNextMonth" class="next-month-indicator">(Next Month)</span>
+                </span>
+                <span v-else>
+                  {{ bill.month }}
+                  <span v-if="bill.isNextMonth" class="next-month-indicator">(Next Month)</span>
+                </span>
+              </td>
+              <td v-if="isAdmin">{{ bill.deviceId }}</td>
+              <td>{{ bill.totalLiters.toFixed(2) }}</td>
+              <td>{{ bill.cubicMeters.toFixed(2) }}</td>
+              <td>
+                <span v-if="bill.totalLiters === 0" class="no-consumption">No Consumption</span>
+                <span v-else>₱ {{ bill.amount.toFixed(2) }}</span>
+              </td>
+              <td>
+                <span
+                  v-if="!isAdmin"
+                  :class="{
+                    'status-paid': bill.status === 'Paid',
+                    'status-pending': bill.status === 'Pending',
+                    'status-due': bill.status === 'Due'
+                  }"
+                >
+                  {{ bill.status }}
+                </span>
+                <select
+                  v-else
+                  v-model="bill.status"
+                  @change="updateBillStatus(bill.id, bill.status)"
+                  class="status-select"
+                  :aria-label="`Update status for bill ${bill.month}`"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Due">Due</option>
+                </select>
+              </td>
+              <td>
+                <button
+                  class="action-button print-button"
+                  @click="printBillingData(bill)"
+                  :aria-label="`Print bill for ${bill.month}`"
+                >
+                  <i class="fas fa-print"></i> Print
+                </button>
+              </td>
+            </tr>
+            <tr v-if="paginatedData.length === 0">
+              <td :colspan="isAdmin ? 7 : 6" class="no-data">No billing data available.</td>
+            </tr>
+          </tbody>
         </table>
       </div>
 
@@ -176,6 +182,7 @@
     </div>
   </div>
 </template>
+
 <script>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { auth, db } from '@/firebase/config';
@@ -192,7 +199,7 @@ export default {
     const userDeviceId = ref(null);
     const userId = ref(null);
     const currentPage = ref(1);
-    const itemsPerPage = 5;
+    const itemsPerPage = 10;
     const saving = ref(false);
     const settings = ref({});
     const searchQuery = ref('');
@@ -203,6 +210,8 @@ export default {
     const monitoringInterval = ref(null);
     const lastProcessedTimestamp = ref(null);
     const forceUpdate = ref(0);
+    // Add a map to track status changes
+    const statusChangeMap = ref({});
 
     // Add watcher for billing data changes
     watch(billingData, (newData) => {
@@ -227,21 +236,41 @@ export default {
     const availableMonths = ref([]);
 
     // Generate available months
-    const generateAvailableMonths = () => {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const startYear = 2023;
-      const monthYears = [];
+    const generateAvailableMonths = async () => {
+      try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const monthYears = [];
 
-      for (let year = currentYear; year >= startYear; year--) {
-        const startMonth = year === currentYear ? currentMonth : 11;
-        const endMonth = year === startYear ? 0 : 0;
-        for (let month = startMonth; month >= endMonth; month--) {
-          monthYears.push(`${months.value[month]} ${year}`);
-        }
+        // Get all billing documents
+        const billingQuery = query(collection(db, 'Billing'));
+        const billingSnapshot = await getDocs(billingQuery);
+        
+        // Create a Set of unique month-years from existing bills
+        const existingMonths = new Set();
+        billingSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.month) {
+            existingMonths.add(data.month);
+          }
+        });
+
+        // Convert Set to Array and sort chronologically
+        const sortedMonths = Array.from(existingMonths).sort((a, b) => {
+          const [monthA, yearA] = a.split(' ');
+          const [monthB, yearB] = b.split(' ');
+          const dateA = new Date(yearA, months.value.indexOf(monthA));
+          const dateB = new Date(yearB, months.value.indexOf(monthB));
+          return dateB - dateA; // Sort in descending order (newest first)
+        });
+
+        availableMonths.value = sortedMonths;
+        console.log('Available months with data:', availableMonths.value);
+      } catch (err) {
+        console.error('Error generating available months:', err);
+        error.value = `Failed to load available months: ${err.message}.`;
       }
-      availableMonths.value = monthYears;
     };
 
     // Fetch settings from Settings/global
@@ -349,20 +378,22 @@ export default {
         const monthIndex = months.value.indexOf(monthName);
         const currentYear = parseInt(year);
 
-        // Set endDate to the last day of the selected month
-        const endDate = new Date(currentYear, monthIndex + 1, 0, 23, 59, 59, 999);
-        // Set prevMonthDate to the last day of the previous month
-        const prevMonthYear = getPreviousMonthYear(monthYear);
-        const prevMonthIndex = months.value.indexOf(prevMonthYear.split(' ')[0]);
-        const prevYear = parseInt(prevMonthYear.split(' ')[1]);
-        const prevMonthDate = new Date(prevYear, prevMonthIndex + 1, 0, 23, 59, 59, 999);
+        // For June 2025, we need to include data from May 16, 2025 onwards
+        const prevMonthIndex = (monthIndex - 1 + 12) % 12;
+        const prevYear = monthIndex === 0 ? currentYear - 1 : currentYear;
+        
+        // Set startDate to the billing calculation date of the previous month
+        const startDate = new Date(prevYear, prevMonthIndex, settings.value.billingCalculationDate, 0, 0, 0, 0);
+        // Set endDate to the billing calculation date of the current month
+        const endDate = new Date(currentYear, monthIndex, settings.value.billingCalculationDate, 23, 59, 59, 999);
 
         console.log('Date ranges for sensor data:', {
           monthYear,
+          startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
-          prevMonthDate: prevMonthDate.toISOString(),
           currentYear,
-          monthIndex
+          monthIndex,
+          billingCalculationDate: settings.value.billingCalculationDate
         });
 
         const q = query(collection(db, 'SensorData'));
@@ -410,31 +441,29 @@ export default {
             };
           }
 
-          // Debug date comparisons
-          const isInCurrentMonth = timestamp <= endDate && 
-                                 timestamp.getFullYear() === currentYear && 
-                                 timestamp.getMonth() === monthIndex;
-          
-          const isInPrevMonth = timestamp <= prevMonthDate && 
-                               timestamp.getFullYear() === prevYear && 
-                               timestamp.getMonth() === prevMonthIndex;
+          // Check if the data falls within the billing period
+          const isInBillingPeriod = timestamp >= startDate && timestamp <= endDate;
 
           console.log('Date comparison for sensor data:', {
             deviceId,
             timestamp: timestamp.toISOString(),
-            isInCurrentMonth,
-            isInPrevMonth,
-            currentMonthYear: `${months.value[monthIndex]} ${currentYear}`,
-            prevMonthYear: `${months.value[prevMonthIndex]} ${prevYear}`
+            isInBillingPeriod,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString()
           });
 
-          // Accumulate liters for the selected month
-          if (isInCurrentMonth) {
+          if (isInBillingPeriod) {
             usageByDevice[deviceId].totalLiters += liters;
             console.log(`Added ${liters} liters to ${deviceId} for totalLiters (timestamp: ${timestamp.toISOString()})`);
           }
-          // Accumulate liters for the previous month
-          if (isInPrevMonth) {
+
+          // For past liters, we need data from the previous billing period
+          const prevStartDate = new Date(prevYear, prevMonthIndex - 1, settings.value.billingCalculationDate, 0, 0, 0, 0);
+          const prevEndDate = new Date(prevYear, prevMonthIndex, settings.value.billingCalculationDate, 23, 59, 59, 999);
+          
+          const isInPrevBillingPeriod = timestamp >= prevStartDate && timestamp <= prevEndDate;
+          
+          if (isInPrevBillingPeriod) {
             usageByDevice[deviceId].pastLiters += liters;
             console.log(`Added ${liters} liters to ${deviceId} for pastLiters (timestamp: ${timestamp.toISOString()})`);
           }
@@ -596,6 +625,19 @@ export default {
             amount
           });
 
+          // Check if we have a manually set status for this bill
+          let billStatus = 'Pending';
+          if (existingBill) {
+            // Use existing status if available
+            billStatus = existingBill.status;
+          }
+          
+          // Check if we have a manually updated status in our map
+          if (statusChangeMap.value[billId]) {
+            billStatus = statusChangeMap.value[billId];
+            console.log(`Using manually set status for ${billId}: ${billStatus}`);
+          }
+
           const billData = {
             deviceId,
             userId: resident.userId,
@@ -605,12 +647,13 @@ export default {
             pastCubics,
             currentCubics,
             amount,
-            status: existingBill ? existingBill.status : 'Pending', // Preserve existing status
+            status: billStatus,
             accountNumber: resident.accountNumber,
             address: resident.address,
             contactNumber: resident.contactNumber,
             email: resident.email,
-            fullName: resident.fullName
+            fullName: resident.fullName,
+            lastUpdated: new Date().toISOString() // Add lastUpdated
           };
 
           console.log(`Generating bill ${billId}:`, billData);
@@ -634,6 +677,9 @@ export default {
       }
     };
 
+    // Enhanced function to check and update bill statuses based on due dates
+    
+
     // Fetch billing data for the selected month and update due status
     const fetchBillingData = async () => {
       try {
@@ -644,30 +690,23 @@ export default {
         // First ensure settings are up to date
         await fetchSettings();
         
-        const q = query(collection(db, 'Billing'), where('month', '==', selectedMonthYear.value));
-        const querySnapshot = await getDocs(q);
+        // Check and update due statuses for all bills
+        const updatedCount = await checkAndUpdateDueStatuses();
+        console.log(`Updated ${updatedCount} bills to Due status`);
 
-        const today = new Date();
+        // Always generate bills for the selected month first
+        console.log(`Generating bills for ${selectedMonthYear.value}`);
+        await generateBills(true); // Force update to ensure latest data is included
+        
+        // Fetch bills for selected month
+        const currentMonthQuery = query(collection(db, 'Billing'), where('month', '==', selectedMonthYear.value));
+        const currentMonthSnapshot = await getDocs(currentMonthQuery);
+
         const billsToUpdate = [];
 
-        // Check if we need to calculate next month's bills
-        const currentDay = today.getDate();
-        if (currentDay > settings.value.billingCalculationDate) {
-          const nextMonthYear = getNextMonthYear();
-          
-          // Check if next month's bills already exist
-          const nextMonthQuery = query(collection(db, 'Billing'), where('month', '==', nextMonthYear));
-          const nextMonthSnapshot = await getDocs(nextMonthQuery);
-          
-          if (nextMonthSnapshot.empty) {
-            // Calculate next month's bills
-            console.log(`Calculating bills for next month: ${nextMonthYear}`);
-            await generateBillsForMonth(nextMonthYear);
-          }
-        }
-
-        billingData.value = await Promise.all(
-          querySnapshot.docs.map(async (doc) => {
+        // Process bills for selected month
+        const processedBills = await Promise.all(
+          currentMonthSnapshot.docs.map(async (doc) => {
             const data = doc.data();
             console.log(`Raw Billing data for ${doc.id}:`, data);
             const isValid =
@@ -683,15 +722,21 @@ export default {
             }
 
             let updatedStatus = data.status;
-            if (data.status === 'Pending') {
+            
+            // Check if we have a manually set status for this bill
+            if (statusChangeMap.value[doc.id]) {
+              updatedStatus = statusChangeMap.value[doc.id];
+              console.log(`Using manually set status for ${doc.id}: ${updatedStatus}`);
+            } else if (data.status === 'Pending') {
+              // Only update status to Due if it's currently Pending and past due date
               const dueDate = calculateDueDate(data.month);
-              if (today > dueDate) {
+              if (new Date() > dueDate) {
                 updatedStatus = 'Due';
                 billsToUpdate.push({ id: doc.id, status: 'Due' });
               }
             }
 
-            const bill = {
+            return {
               id: doc.id,
               deviceId: data.deviceId,
               month: data.month,
@@ -706,19 +751,29 @@ export default {
               address: data.address || 'N/A',
               contactNumber: data.contactNumber || 'N/A',
               email: data.email || 'N/A',
-              fullName: data.fullName || 'N/A'
+              fullName: data.fullName || 'N/A',
+              lastUpdated: data.lastUpdated || new Date().toISOString()
             };
-            console.log(`Processed bill ${doc.id}:`, bill);
-            return bill;
           })
-        ).then(bills => bills.filter(data => data !== null))
-         .then(bills => bills.filter(data => isAdmin.value || data.deviceId === userDeviceId.value));
+        ).then(bills => bills.filter(data => data !== null));
+
+        // Filter bills based on user role
+        billingData.value = processedBills.filter(data => isAdmin.value || data.deviceId === userDeviceId.value);
 
         // Update Firestore for bills that need status change
         for (const bill of billsToUpdate) {
           try {
+            // Skip if we have a manually set status
+            if (statusChangeMap.value[bill.id]) {
+              console.log(`Skipping auto-update for ${bill.id} as it has a manually set status`);
+              continue;
+            }
+            
             const billRef = doc(db, 'Billing', bill.id);
-            await updateDoc(billRef, { status: bill.status });
+            await updateDoc(billRef, { 
+              status: bill.status,
+              lastUpdated: new Date().toISOString()
+            });
             console.log(`Updated bill status for ${bill.id} to ${bill.status}`);
           } catch (err) {
             console.error(`Failed to update bill ${bill.id} status:`, err);
@@ -727,15 +782,9 @@ export default {
         }
 
         console.log(`Fetched billing data for ${selectedMonthYear.value}:`, billingData.value);
-
-        // Generate or update bills for the selected month
-        console.log(`Generating/updating bills for ${selectedMonthYear.value}`);
-        await generateBills(false); // Generate new bills only
-        // If no bills were found, try force updating to include late sensor data
-        if (billingData.value.length === 0) {
-          console.log(`No bills found for ${selectedMonthYear.value}, forcing update`);
-          await generateBills(true); // Force update existing bills
-        }
+        
+        // After fetching data, check again for any bills that need status updates
+        await checkAndUpdateDueStatuses();
       } catch (err) {
         console.error('Error fetching billing data:', err);
         error.value = `Failed to fetch billing data for ${selectedMonthYear.value}: ${err.message}.`;
@@ -760,11 +809,19 @@ export default {
         const nextMonth = new Date(currentYear, currentMonth + 1, 1);
         const nextMonthYear = `${months.value[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
 
-        // Delete and recalculate current month's bills
-        console.log(`Recalculating current month (${currentMonthYear}) bills...`);
+        // Save current status values before recalculation
         const currentMonthQuery = query(collection(db, 'Billing'), where('month', '==', currentMonthYear));
         const currentMonthSnapshot = await getDocs(currentMonthQuery);
         
+        // Store current statuses in our map
+        for (const doc of currentMonthSnapshot.docs) {
+          const data = doc.data();
+          statusChangeMap.value[doc.id] = data.status;
+          console.log(`Saved status for ${doc.id}: ${data.status}`);
+        }
+
+        // Delete and recalculate current month's bills
+        console.log(`Recalculating current month (${currentMonthYear}) bills...`);
         for (const doc of currentMonthSnapshot.docs) {
           await deleteDoc(doc.ref);
           console.log(`Deleted existing bill ${doc.id}`);
@@ -775,6 +832,13 @@ export default {
         console.log(`Recalculating next month (${nextMonthYear}) bills...`);
         const nextMonthQuery = query(collection(db, 'Billing'), where('month', '==', nextMonthYear));
         const nextMonthSnapshot = await getDocs(nextMonthQuery);
+        
+        // Store next month statuses in our map
+        for (const doc of nextMonthSnapshot.docs) {
+          const data = doc.data();
+          statusChangeMap.value[doc.id] = data.status;
+          console.log(`Saved status for ${doc.id}: ${data.status}`);
+        }
         
         for (const doc of nextMonthSnapshot.docs) {
           await deleteDoc(doc.ref);
@@ -813,11 +877,25 @@ export default {
       if (!isAdmin.value) return;
       saving.value = true;
       try {
+        console.log(`Updating bill status for ${billId} to ${status}`);
+        
+        // Store the status change in our map
+        statusChangeMap.value[billId] = status;
+        
         const billRef = doc(db, 'Billing', billId);
-        await updateDoc(billRef, { status });
+        await updateDoc(billRef, { 
+          status,
+          lastUpdated: new Date().toISOString()
+        });
+        
+        // Update the bill in our local data
         const bill = billingData.value.find(b => b.id === billId);
-        if (bill) bill.status = status;
-        console.log(`Updated bill status for ${billId} to ${status}`);
+        if (bill) {
+          bill.status = status;
+          bill.lastUpdated = new Date().toISOString();
+        }
+        
+        console.log(`Successfully updated bill status for ${billId} to ${status}`);
       } catch (err) {
         error.value = `Failed to update bill status: ${err.message}.`;
         console.error('Error updating bill status:', err);
@@ -889,11 +967,21 @@ export default {
 
       let receipts = '';
       if (bill) {
+        // Print a single bill
         receipts = generateReceipt(bill);
       } else {
+        // Print all bills, including those not on the current page
         const receiptGroups = [];
-        for (let i = 0; i < paginatedData.value.length; i += 6) {
-          const group = paginatedData.value.slice(i, i + 6);
+        // Use filteredData to respect search filters, sorted as in processedData
+        const allBills = filteredData.value
+          .map(bill => ({
+            ...bill,
+            timestamp: new Date(bill.month.split(' ')[1], months.value.indexOf(bill.month.split(' ')[0])),
+          }))
+          .sort((a, b) => b.timestamp - a.timestamp);
+          
+        for (let i = 0; i < allBills.length; i += 6) {
+          const group = allBills.slice(i, i + 6);
           const groupReceipts = group.map(generateReceipt).join('');
           receiptGroups.push(`
             <div class="receipt-page">
@@ -1069,6 +1157,13 @@ export default {
           const deviceId = resident.deviceId;
           const billId = `${deviceId}_${monthYear.replace(' ', '_')}`;
 
+          // Check if we have a manually set status for this bill
+          let billStatus = 'Pending';
+          if (statusChangeMap.value[billId]) {
+            billStatus = statusChangeMap.value[billId];
+            console.log(`Using manually set status for ${billId}: ${billStatus}`);
+          }
+
           const previousBill = await fetchPreviousBill(deviceId, monthYear);
           let pastCubics = 0;
           if (previousBill && typeof previousBill.currentCubics === 'number') {
@@ -1112,13 +1207,13 @@ export default {
             pastCubics,
             currentCubics,
             amount,
-            status: 'Pending', // Always start as Pending
+            status: billStatus,
             accountNumber: resident.accountNumber,
             address: resident.address,
             contactNumber: resident.contactNumber,
             email: resident.email,
             fullName: resident.fullName,
-            lastUpdated: new Date().toISOString()
+            lastUpdated: new Date().toISOString() // Add lastUpdated
           };
 
           try {
@@ -1165,6 +1260,19 @@ export default {
 
           // Always update current month's bills when new data arrives
           console.log('Updating current month bills with new sensor data...');
+          
+          // First, save current statuses
+          const currentBillsQuery = query(collection(db, 'Billing'), where('month', '==', currentMonthYear));
+          const currentBillsSnapshot = await getDocs(currentBillsQuery);
+          
+          for (const doc of currentBillsSnapshot.docs) {
+            const data = doc.data();
+            if (!statusChangeMap.value[doc.id]) {
+              statusChangeMap.value[doc.id] = data.status;
+              console.log(`Saved status for ${doc.id}: ${data.status}`);
+            }
+          }
+          
           await generateBillsForMonth(currentMonthYear);
           
           // If we're past the billing calculation date, also calculate next month
@@ -1172,6 +1280,19 @@ export default {
             const nextMonth = new Date(currentYear, currentMonth + 1, 1);
             const nextMonthYear = `${months.value[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
             console.log('Calculating next month bills...', nextMonthYear);
+            
+            // First, save next month statuses
+            const nextMonthBillsQuery = query(collection(db, 'Billing'), where('month', '==', nextMonthYear));
+            const nextMonthBillsSnapshot = await getDocs(nextMonthBillsQuery);
+            
+            for (const doc of nextMonthBillsSnapshot.docs) {
+              const data = doc.data();
+              if (!statusChangeMap.value[doc.id]) {
+                statusChangeMap.value[doc.id] = data.status;
+                console.log(`Saved status for ${doc.id}: ${data.status}`);
+              }
+            }
+            
             await generateBillsForMonth(nextMonthYear);
           }
 
@@ -1188,6 +1309,14 @@ export default {
             const newBillingData = await Promise.all(
               billingSnapshot.docs.map(async (doc) => {
                 const data = doc.data();
+                
+                // Check if we have a manually set status for this bill
+                let billStatus = data.status;
+                if (statusChangeMap.value[doc.id]) {
+                  billStatus = statusChangeMap.value[doc.id];
+                  console.log(`Using manually set status for ${doc.id}: ${billStatus}`);
+                }
+                
                 const bill = {
                   id: doc.id,
                   deviceId: data.deviceId,
@@ -1197,13 +1326,14 @@ export default {
                   pastCubics: data.pastCubics || 0,
                   currentCubics: data.currentCubics || data.cubicMeters || 0,
                   amount: data.amount,
-                  status: data.status,
+                  status: billStatus,
                   userId: data.userId,
                   accountNumber: data.accountNumber || 'N/A',
                   address: data.address || 'N/A',
                   contactNumber: data.contactNumber || 'N/A',
                   email: data.email || 'N/A',
-                  fullName: data.fullName || 'N/A'
+                  fullName: data.fullName || 'N/A',
+                  lastUpdated: data.lastUpdated || new Date().toISOString() // Add lastUpdated
                 };
                 return bill;
               })
@@ -1225,7 +1355,78 @@ export default {
       }
     };
 
-    // Update the monitoring interval to be more frequent
+    // Enhanced function to check and update bill statuses based on due dates
+    const checkAndUpdateDueStatuses = async () => {
+      try {
+        console.log('Checking for bills past due date...');
+        const today = new Date();
+        
+        // Get all bills with "Pending" status
+        const pendingBillsQuery = query(
+          collection(db, 'Billing'), 
+          where('status', '==', 'Pending')
+        );
+        
+        const pendingBillsSnapshot = await getDocs(pendingBillsQuery);
+        const billsToUpdate = [];
+        
+        pendingBillsSnapshot.forEach(doc => {
+          const bill = doc.data();
+          // Calculate due date for this bill
+          const dueDate = calculateDueDate(bill.month);
+          
+          // Check if bill is past due date
+          if (today > dueDate) {
+            console.log(`Bill ${doc.id} is past due date (${dueDate.toISOString()}), marking as Due`);
+            billsToUpdate.push({
+              id: doc.id,
+              status: 'Due',
+              deviceId: bill.deviceId,
+              month: bill.month
+            });
+          }
+        });
+        
+        // Update all bills that are past due
+        for (const bill of billsToUpdate) {
+          try {
+            // Skip if we have a manually set status that's not "Pending"
+            if (statusChangeMap.value[bill.id] && statusChangeMap.value[bill.id] !== 'Pending') {
+              console.log(`Skipping auto-update for ${bill.id} as it has a manually set status: ${statusChangeMap.value[bill.id]}`);
+              continue;
+            }
+            
+            // Update in Firestore
+            const billRef = doc(db, 'Billing', bill.id);
+            await updateDoc(billRef, { 
+              status: 'Due',
+              lastUpdated: new Date().toISOString()
+            });
+            
+            // Update status in our status map
+            statusChangeMap.value[bill.id] = 'Due';
+            
+            console.log(`Updated bill ${bill.id} status to Due`);
+            
+            // Update local billingData if it's in the current view
+            const billIndex = billingData.value.findIndex(b => b.id === bill.id);
+            if (billIndex !== -1) {
+              billingData.value[billIndex].status = 'Due';
+              billingData.value[billIndex].lastUpdated = new Date().toISOString();
+            }
+          } catch (err) {
+            console.error(`Failed to update bill ${bill.id} status:`, err);
+          }
+        }
+        
+        return billsToUpdate.length; // Return number of bills updated
+      } catch (err) {
+        console.error('Error checking due statuses:', err);
+        return 0;
+      }
+    };
+
+    // Enhanced startContinuousMonitoring to include due date checks
     const startContinuousMonitoring = async () => {
       try {
         console.log('Starting continuous monitoring of sensor data...');
@@ -1238,8 +1439,18 @@ export default {
         // Process immediately on start
         await processNewSensorData();
         
+        // Check for due bills immediately
+        await checkAndUpdateDueStatuses();
+        
         // Then process every 10 seconds
-        monitoringInterval.value = setInterval(processNewSensorData, 10 * 1000);
+        monitoringInterval.value = setInterval(async () => {
+          await processNewSensorData();
+          // Check for due bills every 10 minutes (less frequent than sensor data)
+          const currentMinute = new Date().getMinutes();
+          if (currentMinute % 10 === 0) {
+            await checkAndUpdateDueStatuses();
+          }
+        }, 10 * 1000);
         
         console.log('Continuous monitoring started');
       } catch (err) {
@@ -1248,36 +1459,18 @@ export default {
       }
     };
 
-    // Update onMounted to ensure monitoring starts
+    // Update onMounted to call generateAvailableMonths
     onMounted(async () => {
       try {
         await fetchUserData();
+        await generateAvailableMonths(); // Generate available months first
         await startContinuousMonitoring();
         
         // Also start a daily check for due dates
         const dailyCheck = setInterval(async () => {
-          const today = new Date();
-          const currentMonth = today.getMonth();
-          const currentYear = today.getFullYear();
-          const currentMonthYear = `${months.value[currentMonth]} ${currentYear}`;
-          
-          // Update bill statuses based on due dates
-          const q = query(collection(db, 'Billing'), where('month', '==', currentMonthYear));
-          const querySnapshot = await getDocs(q);
-          
-          for (const doc of querySnapshot.docs) {
-            const bill = doc.data();
-            if (bill.status === 'Pending') {
-              const dueDate = calculateDueDate(bill.month);
-              if (today > dueDate) {
-                await updateDoc(doc.ref, { 
-                  status: 'Due',
-                  lastUpdated: new Date().toISOString()
-                });
-                console.log(`Updated bill ${doc.id} status to Due`);
-              }
-            }
-          }
+          console.log('Running daily check for due bills...');
+          const updatedCount = await checkAndUpdateDueStatuses();
+          console.log(`Daily check: Updated ${updatedCount} bills to Due status`);
         }, 24 * 60 * 60 * 1000); // Check daily
 
         // Clean up on unmount
@@ -1312,6 +1505,7 @@ export default {
       refreshBills,
       startContinuousMonitoring,
       forceUpdate,
+      checkAndUpdateDueStatuses,
     };
   },
 };
@@ -1330,6 +1524,7 @@ export default {
   --text-light: #888;
   --status-paid: #4caf50;
   --status-pending: #ffc107;
+  --status-due: #f44336;
 }
 
 * {
@@ -1351,7 +1546,6 @@ export default {
   color: var(--secondary-color);
   margin-bottom: 1.5rem;
   font-weight: 600;
- 
 }
 
 .filters {
@@ -1547,6 +1741,11 @@ export default {
 
 .status-pending {
   color: var(--status-pending);
+  font-weight: 500;
+}
+
+.status-due {
+  color: var(--status-due);
   font-weight: 500;
 }
 

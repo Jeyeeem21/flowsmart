@@ -19,24 +19,31 @@
         <h3>Water Quality</h3>
         <p><strong>TDS:</strong> {{ latestData.tds_ppm }} ppm <span class="status">({{ tdsStatus }})</span></p>
         <p><strong>Conductivity:</strong> {{ latestData.us_cm }} µS/cm</p>
+        <p><strong>pH:</strong> {{ latestData.ph || 'N/A' }} <span class="status">({{ phStatus }})</span></p>
       </div>
       <!-- Today's Total Usage Card -->
       <div class="usage-card">
-        <h3>Daily Usage</h3>
+        <h3>Average Daily Usage</h3>
         <p><strong>Liters:</strong> {{ todayTotal.liters.toFixed(2) }} liters</p>
         <p><strong>Cubic Meters:</strong> {{ todayTotal.cubic.toFixed(4) }} m³</p>
       </div>
       <!-- Monthly Usage Card -->
       <div class="usage-card">
-        <h3>Monthly Usage</h3>
+        <h3>Average Monthly Usage</h3>
         <p><strong>Liters:</strong> {{ monthlyTotal.liters.toFixed(2) }} liters</p>
         <p><strong>Cubic Meters:</strong> {{ monthlyTotal.cubic.toFixed(4) }} m³</p>
       </div>
       <!-- Yearly Usage Card -->
       <div class="usage-card">
-        <h3>Yearly Usage</h3>
+        <h3>Average Yearly Usage</h3>
         <p><strong>Liters:</strong> {{ yearlyTotal.liters.toFixed(2) }} liters</p>
         <p><strong>Cubic Meters:</strong> {{ yearlyTotal.cubic.toFixed(4) }} m³</p>
+      </div>
+      <!-- Total Cubic Usage Card -->
+      <div class="usage-card total-cubic">
+        <h3>Total Cubic Usage</h3>
+        <p><strong>All Time:</strong> {{ totalCubicUsage.toFixed(4) }} m³</p>
+        <p><strong>Liters:</strong> {{ (totalCubicUsage * 1000).toFixed(2) }} liters</p>
       </div>
     </div>
 
@@ -110,11 +117,47 @@
         </div>
       </div>
     </div>
+
+    <!-- Add the alert modal -->
+    <div v-if="showAlert" class="alert-modal-overlay">
+      <div class="alert-modal">
+        <div class="alert-header">
+          <i class="fas fa-exclamation-triangle"></i>
+          <h3>High Water Usage Alert</h3>
+        </div>
+        <div class="alert-content">
+          <p>Total water usage has exceeded the daily threshold!</p>
+          <div class="usage-details">
+            <div class="usage-item">
+              <span class="label">Total Usage Today:</span>
+              <span class="value">{{ currentUsage.toFixed(2) }} m³</span>
+            </div>
+            <div class="usage-item">
+              <span class="label">Daily Threshold:</span>
+              <span class="value">{{ thresholdValue.toFixed(2) }} m³</span>
+            </div>
+            <div class="usage-item">
+              <span class="label">Notified Admin:</span>
+              <span class="value">{{ alertAdminName }}</span>
+            </div>
+          </div>
+          <div class="alert-message">
+            <i class="fas fa-info-circle"></i>
+            <p>Please check the system for any unusual consumption patterns.</p>
+          </div>
+        </div>
+        <div class="alert-footer">
+          <button @click="dismissAlert" class="dismiss-button">
+            <i class="fas fa-check"></i> Acknowledge
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 <script>
 import { db, auth } from '@/firebase/config';
-import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, where, onSnapshot } from 'firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
 import { Chart, LineController, BarController, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Tooltip, Filler } from 'chart.js';
 
@@ -136,10 +179,11 @@ export default {
       ],
       availableYears: [],
       allData: [],
-      latestData: { tds_ppm: 0, us_cm: 0, liters: 0, timestamp: '' },
+      latestData: { tds_ppm: 0, us_cm: 0, ph: 0, liters: 0, timestamp: '' },
       todayTotal: { liters: 0, cubic: 0 },
       monthlyTotal: { liters: 0, cubic: 0 },
       yearlyTotal: { liters: 0, cubic: 0 },
+      totalCubicUsage: 0,
       dailyChartData: [],
       monthlyChartData: [],
       yearlyChartData: [],
@@ -148,7 +192,13 @@ export default {
       yearlyChart: null,
       refreshInterval: null,
       userRole: null,
-      userDeviceId: null
+      userDeviceId: null,
+      showAlert: false,
+      currentUsage: 0,
+      thresholdValue: 0,
+      alertAdminName: '',
+      unsubscribeSensorData: null,
+      unsubscribeLatestData: null,
     };
   },
   computed: {
@@ -175,6 +225,12 @@ export default {
       if (tds >= 500) return 'status-neutral';
       return 'status-safe';
     },
+    phStatus() {
+      const ph = this.latestData.ph;
+      if (ph > 7) return 'Alkaline';
+      if (ph >= 6.5) return 'Neutral';
+      return 'Acidic';
+    },
     currentTime() {
   const date = new Date();
   return date.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -184,7 +240,7 @@ export default {
     resetData() {
       this.allData = [];
       this.processData([]);
-      this.latestData = { tds_ppm: 0, us_cm: 0, liters: 0, timestamp: '' };
+      this.latestData = { tds_ppm: 0, us_cm: 0, ph: 0, liters: 0, timestamp: '' };
       this.todayTotal = { liters: 0, cubic: 0 };
       this.monthlyTotal = { liters: 0, cubic: 0 };
       this.yearlyTotal = { liters: 0, cubic: 0 };
@@ -248,21 +304,27 @@ export default {
           );
         }
 
-        const snapshot = await getDocs(q);
-        console.log('Resident query snapshot:', snapshot.docs.map(doc => doc.data()));
-        
-        if (snapshot.empty) {
-          this.resetData();
-          throw new Error('No water usage data available yet for your device.');
-        }
+        // Set up real-time listener for sensor data
+        this.unsubscribeSensorData = onSnapshot(q, (snapshot) => {
+          if (snapshot.empty) {
+            this.resetData();
+            this.errorMessage = 'No water usage data available yet for your device.';
+            return;
+          }
 
-        // Process data
-        this.allData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+          // Process data
+          this.allData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
 
-        // Get latest data point
+          this.processData(this.allData);
+        }, (error) => {
+          console.error('Error in sensor data listener:', error);
+          this.errorMessage = 'Failed to load data. Please try again.';
+        });
+
+        // Set up real-time listener for latest data
         const latestQuery = this.userRole === 'admin'
           ? query(collection(db, 'SensorData'), orderBy('timestamp', 'desc'), limit(1))
           : query(
@@ -272,12 +334,13 @@ export default {
               limit(1)
             );
 
-        const latestSnapshot = await getDocs(latestQuery);
-        if (!latestSnapshot.empty) {
-          this.latestData = latestSnapshot.docs[0].data();
-        }
-
-        this.processData(this.allData);
+        this.unsubscribeLatestData = onSnapshot(latestQuery, (snapshot) => {
+          if (!snapshot.empty) {
+            this.latestData = snapshot.docs[0].data();
+          }
+        }, (error) => {
+          console.error('Error in latest data listener:', error);
+        });
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -308,6 +371,7 @@ export default {
       let todayLiters = 0;
       let monthlyLiters = 0;
       let yearlyLiters = 0;
+      let totalLiters = 0;
 
       const today = new Date();
       const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
@@ -343,9 +407,12 @@ export default {
         if (dKey === todayKey) todayLiters += liters;
         if (mKey === monthKey) monthlyLiters += liters;
         if (yKey === yearKey) yearlyLiters += liters;
+        
+        totalLiters += liters;
       });
 
       this.availableYears = Array.from(yearsSet).sort();
+      this.totalCubicUsage = totalLiters / 1000;
 
       this.todayTotal = {
         liters: todayLiters,
@@ -422,7 +489,7 @@ export default {
               data: getValues(this.dailyChartData),
               backgroundColor: 'rgba(76, 175, 80, 0.2)',
               borderColor: 'rgba(76, 175, 80, 1)',
-              fill: true,
+              fill: 'origin',
               tension: 0.4,
               pointRadius: 4,
               pointHoverRadius: 6,
@@ -601,25 +668,127 @@ export default {
         }
       });
     },
-    startAutoRefresh() {
-      this.refreshInterval = setInterval(() => {
-        this.fetchData();
-      }, 60000); // Refresh every 5 minutes
+    dismissAlert() {
+      this.showAlert = false;
     },
-    stopAutoRefresh() {
-      if (this.refreshInterval) {
-        clearInterval(this.refreshInterval);
+    showThresholdAlert(usage, threshold, adminName) {
+      if (typeof usage !== 'number' || typeof threshold !== 'number') {
+        console.error('Invalid usage or threshold values:', { usage, threshold });
+        return;
       }
-    }
+
+      this.currentUsage = usage;
+      this.thresholdValue = threshold;
+      this.alertAdminName = adminName || 'Unknown Admin';
+      this.showAlert = true;
+    },
+    async checkThreshold() {
+      try {
+        console.log('Starting threshold check...');
+        const user = auth.currentUser;
+        if (!user) {
+          console.log('No authenticated user found');
+          return;
+        }
+        console.log('Current user:', user.uid);
+
+        // Get all users first
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        console.log('Total users found:', usersSnapshot.size);
+
+        // Get all admin users
+        const adminUsers = usersSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(user => user.role === 'admin');
+        
+        console.log('Number of admin users found:', adminUsers.length);
+
+        // Get threshold settings for each admin
+        const adminThresholds = new Map();
+        for (const admin of adminUsers) {
+          const thresholdDoc = await getDoc(doc(db, 'threshold', admin.id));
+          if (thresholdDoc.exists()) {
+            const thresholdData = thresholdDoc.data();
+            if (thresholdData.notifyOnThreshold && typeof thresholdData.dailyThresholdCubicMeters === 'number') {
+              adminThresholds.set(admin.id, {
+                ...admin,
+                threshold: thresholdData.dailyThresholdCubicMeters
+              });
+            }
+          }
+        }
+        
+        console.log('Number of admins with valid thresholds:', adminThresholds.size);
+
+        // Get all sensor data
+        const sensorSnapshot = await getDocs(collection(db, 'SensorData'));
+        console.log(`Found ${sensorSnapshot.size} total sensor readings`);
+
+        // Calculate total usage for today across all devices
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        console.log('Checking usage for date:', today.toISOString());
+        
+        let totalUsage = 0;
+        let todayReadings = 0;
+
+        // Sum up all readings for today
+        sensorSnapshot.forEach(doc => {
+          const data = doc.data();
+          const timestamp = new Date(data.timestamp);
+          if (timestamp >= today && typeof data.liters === 'number') {
+            totalUsage += data.liters;
+            todayReadings++;
+          }
+        });
+
+        console.log(`Found ${todayReadings} total readings for today`);
+        const usageInCubicMeters = totalUsage / 1000;
+        console.log(`Total water usage today:`, usageInCubicMeters, 'm³');
+
+        // Check against each admin's threshold
+        for (const [adminId, adminData] of adminThresholds) {
+          const adminThreshold = adminData.threshold;
+          console.log(`Checking against admin ${adminData.fullName}'s threshold:`, adminThreshold, 'm³');
+
+          // Show alert if threshold is exceeded for this admin
+          if (usageInCubicMeters >= adminThreshold) {
+            console.log(`Threshold exceeded for admin ${adminData.fullName}! Showing alert...`);
+            this.showThresholdAlert(
+              usageInCubicMeters, 
+              adminThreshold, 
+              adminData.fullName || 'Unknown Admin' // Admin's name with fallback
+            );
+          } else {
+            console.log(`Usage within threshold for admin ${adminData.fullName}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking threshold:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        });
+      }
+    },
   },
   mounted() {
     this.$nextTick(() => {
       this.fetchData();
-      this.startAutoRefresh();
     });
+    
+    // Initial check
+    this.checkThreshold();
   },
   beforeUnmount() {
-    this.stopAutoRefresh();
+    // Clean up listeners when component is unmounted
+    if (this.unsubscribeSensorData) {
+      this.unsubscribeSensorData();
+    }
+    if (this.unsubscribeLatestData) {
+      this.unsubscribeLatestData();
+    }
     if (this.dailyChart) this.dailyChart.destroy();
     if (this.monthlyChart) this.monthlyChart.destroy();
     if (this.yearlyChart) this.yearlyChart.destroy();
@@ -793,6 +962,19 @@ export default {
   color: var(--status-contaminated);
 }
 
+/* pH Status Colors */
+.status-acidic {
+  color: #d32f2f;
+}
+
+.status-neutral {
+  color: #ffc107;
+}
+
+.status-alkaline {
+  color: #4caf50;
+}
+
 /* Usage Card */
 .usage-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
@@ -942,7 +1124,8 @@ export default {
 /* Chart Layout */
 .charts-row {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -958,6 +1141,13 @@ export default {
 
 .daily-chart-wrapper {
   max-width: 1200px;
+  flex: 1 1 100%;
+}
+
+.monthly-chart-wrapper,
+.yearly-chart-wrapper {
+  flex: 1 1 calc(50% - 0.5rem);
+  max-width: calc(50% - 0.5rem);
 }
 
 .chart-header {
@@ -1028,14 +1218,11 @@ canvas {
   font-size: 0.9rem;
 }
 
-/* Desktop - Large (4 cards in a row) */
+/* Desktop - Large */
+/* Desktop - Large */
 @media (min-width: 992px) {
   .analytics-charts {
     padding: 1.5rem;
-  }
-  .cards-row {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.25rem;
   }
   .charts-row {
     flex-direction: row;
@@ -1049,31 +1236,24 @@ canvas {
     flex: 1 1 100%;
     max-width: 1200px;
   }
-  .chart-content {
-    min-height: 300px;
-    max-height: 350px;
+  .monthly-chart-wrapper,
+  .yearly-chart-wrapper {
+    flex: 1 1 calc(50% - 0.5rem);
+    max-width: calc(50% - 0.5rem);
   }
-  .daily-chart-wrapper .chart-content {
-    min-height: 400px;
-    max-height: 450px;
+  .monthly-chart-wrapper .chart-content,
+  .yearly-chart-wrapper .chart-content {
+    min-height: 350px; /* Increased from 250px */
+    max-height: 450px; /* Increased from 350px */
   }
-  .daily-chart-wrapper canvas {
-    max-height: 450px !important;
-  }
-  .header-controls h2 {
-    font-size: 1.75rem;
-  }
-  .chart-controls select {
-    padding: 0.5rem 1rem;
+  .monthly-chart-wrapper canvas,
+  .yearly-chart-wrapper canvas {
+    max-height: 450px !important; /* Increased from 350px */
   }
 }
-
+/* Tablet - Medium */
 /* Tablet - Medium */
 @media (min-width: 768px) and (max-width: 991.99px) {
-  .cards-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
   .charts-row {
     flex-direction: row;
     flex-wrap: wrap;
@@ -1086,82 +1266,35 @@ canvas {
     flex: 1 1 100%;
     max-width: 100%;
   }
-  .chart-content {
-    min-height: 300px;
-    max-height: 350px;
+  .monthly-chart-wrapper,
+  .yearly-chart-wrapper {
+    flex: 1 1 calc(50% - 0.5rem);
+    max-width: calc(50% - 0.5rem);
   }
-  .daily-chart-wrapper .chart-content {
-    min-height: 375px;
+  .monthly-chart-wrapper .chart-content,
+  .yearly-chart-wrapper .chart-content {
+    min-height: 300px; /* Slightly increased for tablets */
     max-height: 400px;
   }
-  .daily-chart-wrapper canvas {
+  .monthly-chart-wrapper canvas,
+  .yearly-chart-wrapper canvas {
     max-height: 400px !important;
-  }
-  .chart-header h3 {
-    font-size: 1rem;
   }
 }
 
 /* Mobile - Small Devices */
 @media (max-width: 575.98px) {
-  .cards-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-  }
-  .sensor-card,
-  .usage-card {
-    padding: 0.75rem;
-    min-height: 120px;
-  }
-  .sensor-card h3,
-  .usage-card h3 {
-    font-size: 0.95rem;
-  }
-  .sensor-card p,
-  .usage-card p {
-    font-size: 0.75rem;
-  }
-  .sensor-card .status {
-    padding: 0.2rem 0.4rem;
-    font-size: 0.75rem;
-  }
-  .header-controls {
+  .charts-row {
     flex-direction: column;
-    align-items: flex-start;
   }
-  .unit-toggle {
-    width: 40%;
-    justify-content: space-between;
+  .chart-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
-  .toggle-button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
-  }
-  .chart-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .chart-controls {
-    flex-direction: column;
-    align-items: flex-end;
-    width: 100%;
-  }
-  .chart-controls select {
-    width: 100%;
-    max-width: none;
-  }
-  .chart-content {
-    min-height: 300px;
-    max-height: 300px;
-  }
-  .daily-chart-wrapper .chart-content {
-    min-height: 350px;
-    max-height: 350px;
-  }
-  .daily-chart-wrapper canvas {
-    min-height: 350px !important;
-    max-height: 350px !important;
-    height: 350px !important;
+  .monthly-chart-wrapper,
+  .yearly-chart-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
 }
 
@@ -1171,46 +1304,172 @@ canvas {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
-  .sensor-card,
-  .usage-card {
-    padding: 0.65rem;
-    min-height: 110px;
+  .total-cubic {
+    grid-column: span 1;
   }
-  .sensor-card h3,
-  .usage-card h3 {
-    font-size: 0.9rem;
-  }
-  .sensor-card p,
-  .usage-card p {
-    font-size: 0.7rem;
-  }
-  .chart-content {
-    min-height: 280px;
-    max-height: 280px;
-  }
-  .daily-chart-wrapper .chart-content {
-    min-height: 320px;
-    max-height: 320px;
-  }
-  .daily-chart-wrapper canvas {
-    min-height: 320px !important;
-    max-height: 320px !important;
-    height: 320px !important;
-  }
-  .chart-header h3 {
-    font-size: 1rem;
-  }
-  .unit-toggle {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-  .unit-label {
-    margin: 0;
-  }
-  .toggle-container {
-    width: 100%;
-    text-align: center;
-  }
+}
+
+/* Total Cubic Card Special Styling */
+.total-cubic {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+  border-left: 4px solid #2e7d32;
+}
+
+.total-cubic h3::before {
+  content: '\f080';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: #2e7d32;
+  font-size: 0.9rem;
+}
+
+.total-cubic:hover {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.1));
+}
+
+/* Alert Modal Styles */
+.alert-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.alert-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideIn 0.3s ease-out;
+}
+
+.alert-header {
+  background: #f44336;
+  color: white;
+  padding: 1rem;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.alert-header i {
+  font-size: 1.5rem;
+}
+
+.alert-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.alert-content {
+  padding: 1.5rem;
+}
+
+.alert-content p {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.usage-details {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.usage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.usage-item:last-child {
+  margin-bottom: 0;
+}
+
+.usage-item .label {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.usage-item .value {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.alert-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #e3f2fd;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.alert-message i {
+  color: #1976d2;
+  font-size: 1.1rem;
+  margin-top: 0.1rem;
+}
+
+.alert-message p {
+  margin: 0;
+  color: #1976d2;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.alert-footer {
+  padding: 1rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dismiss-button {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.dismiss-button:hover {
+  background: #388e3c;
+}
+
+.dismiss-button i {
+  font-size: 0.9rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 </style>

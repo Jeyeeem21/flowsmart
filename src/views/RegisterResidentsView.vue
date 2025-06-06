@@ -300,10 +300,7 @@ export default {
         // Move to success step
         this.currentStep = 3;
         
-        // Redirect to login page after a short delay
-        setTimeout(() => {
-          this.router.push('/login');
-        }, 2000);
+        
       } catch (error) {
         console.error('Profile completion error:', error);
         this.error = this.getErrorMessage(error);

@@ -21,6 +21,46 @@
 
     <!-- Report Content -->
     <div v-else class="report-content">
+      <!-- Search Controls -->
+      <div class="search-controls">
+        <div class="search-group">
+          <label class="search-label" :for="`date-search-${reportType}`">Search by {{ reportType === 'daily' ? 'Date' : reportType === 'monthly' ? 'Month' : 'Year' }}</label>
+          <input
+            v-if="reportType !== 'yearly'"
+            :id="`date-search-${reportType}`"
+            v-model="searchDate"
+            :type="reportType === 'daily' ? 'date' : 'month'"
+            class="search-input"
+            :placeholder="reportType === 'daily' ? 'Select date' : 'Select month'"
+            :aria-label="`Search by ${reportType === 'daily' ? 'date' : 'month'}`"
+            @input="currentPage = 1"
+          >
+          <select
+            v-else
+            :id="`date-search-${reportType}`"
+            v-model="searchDate"
+            class="search-input"
+            aria-label="Search by year"
+            @change="currentPage = 1"
+          >
+            <option value="" disabled selected>Select year</option>
+            <option v-for="year in availableYears" :key="year" :value="year">{{ year }}</option>
+          </select>
+        </div>
+        <div v-if="isAdmin" class="search-group">
+          <label class="search-label" for="device-id-search">Search by Device ID</label>
+          <input
+            id="device-id-search"
+            v-model="searchDeviceId"
+            type="text"
+            class="search-input"
+            placeholder="Enter device ID"
+            aria-label="Search by device ID"
+            @input="currentPage = 1"
+          >
+        </div>
+      </div>
+
       <!-- Toggle Buttons -->
       <div class="toggle-controls">
         <div class="unit-toggle">
@@ -63,21 +103,23 @@
               <th v-if="isAdmin">Device ID</th>
               <th>Liters</th>
               <th>m³</th>
+              <th>pH</th>
               <th>TDS</th>
               <th>µS/cm</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(row, index) in paginatedData" :key="index">
-              <td>{{ row.label }}</td>
-              <td v-if="isAdmin">{{ row.deviceId }}</td>
-              <td>{{ row.liters.toFixed(2) }}</td>
-              <td>{{ row.cubicMeters.toFixed(3) }}</td>
-              <td>{{ row.tds_ppm.toFixed(0) }}</td>
-              <td>{{ row.us_cm.toFixed(0) }}</td>
+              <td data-label="Date">{{ row.label }}</td>
+              <td v-if="isAdmin" data-label="Device ID">{{ row.deviceId }}</td>
+              <td data-label="Liters">{{ row.liters.toFixed(2) }}</td>
+              <td data-label="m³">{{ row.cubicMeters.toFixed(3) }}</td>
+              <td data-label="pH">{{ row.ph !== null ? row.ph.toFixed(2) : 'N/A' }}</td>
+              <td data-label="TDS">{{ row.tds_ppm.toFixed(0) }}</td>
+              <td data-label="µS/cm">{{ row.us_cm.toFixed(0) }}</td>
             </tr>
             <tr v-if="paginatedData.length === 0">
-              <td :colspan="isAdmin ? 6 : 5" class="no-data">No data available for this period.</td>
+              <td :colspan="isAdmin ? 7 : 6" class="no-data">No data available for this period.</td>
             </tr>
           </tbody>
         </table>
@@ -141,7 +183,9 @@ export default {
     const isAdmin = ref(false);
     const userDeviceId = ref(null);
     const currentPage = ref(1);
-    const itemsPerPage = 5;
+    const itemsPerPage = 10;
+    const searchDate = ref('');
+    const searchDeviceId = ref('');
 
     // Fetch user data and determine role
     const fetchUserData = async () => {
@@ -197,6 +241,7 @@ export default {
             return {
               deviceId: data.id,
               liters: data.liters,
+              ph: typeof data.ph === 'number' && !isNaN(data.ph) ? data.ph : null,
               tds_ppm: data.tds_ppm,
               us_cm: data.us_cm,
               timestamp: new Date(data.timestamp),
@@ -210,7 +255,13 @@ export default {
       }
     };
 
-    // Process data based on report type
+    // Compute available years from sensor data
+    const availableYears = computed(() => {
+      const years = new Set(sensorData.value.map(data => data.timestamp.getFullYear()));
+      return Array.from(years).sort((a, b) => b - a);
+    });
+
+    // Process data based on report type and search criteria
     const processedData = computed(() => {
       // Define month names
       const months = [
@@ -218,9 +269,41 @@ export default {
         'July', 'August', 'September', 'October', 'November', 'December'
       ];
 
+      // Parse search date
+      let filterDate = null;
+      if (searchDate.value) {
+        if (reportType.value === 'daily') {
+          const date = new Date(searchDate.value);
+          if (!isNaN(date.getTime())) {
+            filterDate = {
+              year: date.getFullYear(),
+              month: date.getMonth(),
+              day: date.getDate(),
+            };
+          }
+        } else if (reportType.value === 'monthly') {
+          const [year, month] = searchDate.value.split('-').map(Number);
+          if (!isNaN(year) && !isNaN(month)) {
+            filterDate = { year, month: month - 1 };
+          }
+        } else if (reportType.value === 'yearly') {
+          const year = parseInt(searchDate.value);
+          if (!isNaN(year)) {
+            filterDate = { year };
+          }
+        }
+      }
+
+      // Filter by device ID (case-insensitive)
+      const filteredByDevice = searchDeviceId.value
+        ? sensorData.value.filter(data =>
+            data.deviceId.toLowerCase().includes(searchDeviceId.value.toLowerCase())
+          )
+        : sensorData.value;
+
       if (reportType.value === 'daily') {
         const dailyMap = {};
-        sensorData.value.forEach(data => {
+        filteredByDevice.forEach(data => {
           const date = data.timestamp;
           const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}_${data.deviceId}`;
           if (!dailyMap[key]) {
@@ -228,31 +311,48 @@ export default {
               label: `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`,
               deviceId: data.deviceId,
               liters: 0,
+              ph: 0,
               tds_ppm: 0,
               us_cm: 0,
+              phCount: 0,
               count: 0,
+              timestamp: date,
             };
           }
           dailyMap[key].liters += data.liters;
+          if (data.ph !== null) {
+            dailyMap[key].ph += data.ph;
+            dailyMap[key].phCount += 1;
+          }
           dailyMap[key].tds_ppm += data.tds_ppm;
           dailyMap[key].us_cm += data.us_cm;
           dailyMap[key].count += 1;
         });
 
         return Object.values(dailyMap)
+          .filter(item => {
+            if (!filterDate) return true;
+            const date = item.timestamp;
+            return (
+              date.getFullYear() === filterDate.year &&
+              date.getMonth() === filterDate.month &&
+              date.getDate() === filterDate.day
+            );
+          })
           .map(item => ({
             label: item.label,
             deviceId: item.deviceId,
             liters: item.liters,
             cubicMeters: item.liters / 1000,
+            ph: item.phCount > 0 ? item.ph / item.phCount : null,
             tds_ppm: item.tds_ppm / item.count,
             us_cm: item.us_cm / item.count,
-            timestamp: new Date(item.label.split(', ')[1], months.indexOf(item.label.split(' ')[0]), item.label.split(' ')[1].split(',')[0]),
+            timestamp: item.timestamp,
           }))
           .sort((a, b) => b.timestamp - a.timestamp);
       } else if (reportType.value === 'monthly') {
         const monthlyMap = {};
-        sensorData.value.forEach(data => {
+        filteredByDevice.forEach(data => {
           const date = data.timestamp;
           const key = `${date.getFullYear()}-${date.getMonth() + 1}_${data.deviceId}`;
           if (!monthlyMap[key]) {
@@ -260,23 +360,39 @@ export default {
               label: `${months[date.getMonth()]} ${date.getFullYear()}`,
               deviceId: data.deviceId,
               liters: 0,
+              ph: 0,
               tds_ppm: 0,
               us_cm: 0,
+              phCount: 0,
               count: 0,
+              timestamp: date,
             };
           }
           monthlyMap[key].liters += data.liters;
+          if (data.ph !== null) {
+            monthlyMap[key].ph += data.ph;
+            monthlyMap[key].phCount += 1;
+          }
           monthlyMap[key].tds_ppm += data.tds_ppm;
           monthlyMap[key].us_cm += data.us_cm;
           monthlyMap[key].count += 1;
         });
 
         return Object.values(monthlyMap)
+          .filter(item => {
+            if (!filterDate) return true;
+            const date = item.timestamp;
+            return (
+              date.getFullYear() === filterDate.year &&
+              date.getMonth() === filterDate.month
+            );
+          })
           .map(item => ({
             label: item.label,
             deviceId: item.deviceId,
             liters: item.liters,
             cubicMeters: item.liters / 1000,
+            ph: item.phCount > 0 ? item.ph / item.phCount : null,
             tds_ppm: item.tds_ppm / item.count,
             us_cm: item.us_cm / item.count,
             timestamp: new Date(item.label.split(' ')[1], months.indexOf(item.label.split(' ')[0])),
@@ -284,7 +400,7 @@ export default {
           .sort((a, b) => b.timestamp - a.timestamp);
       } else {
         const yearlyMap = {};
-        sensorData.value.forEach(data => {
+        filteredByDevice.forEach(data => {
           const date = data.timestamp;
           const key = `${date.getFullYear()}_${data.deviceId}`;
           if (!yearlyMap[key]) {
@@ -292,23 +408,36 @@ export default {
               label: `${date.getFullYear()}`,
               deviceId: data.deviceId,
               liters: 0,
+              ph: 0,
               tds_ppm: 0,
               us_cm: 0,
+              phCount: 0,
               count: 0,
+              timestamp: date,
             };
           }
           yearlyMap[key].liters += data.liters;
+          if (data.ph !== null) {
+            yearlyMap[key].ph += data.ph;
+            yearlyMap[key].phCount += 1;
+          }
           yearlyMap[key].tds_ppm += data.tds_ppm;
           yearlyMap[key].us_cm += data.us_cm;
           yearlyMap[key].count += 1;
         });
 
         return Object.values(yearlyMap)
+          .filter(item => {
+            if (!filterDate) return true;
+            const date = item.timestamp;
+            return date.getFullYear() === filterDate.year;
+          })
           .map(item => ({
             label: item.label,
             deviceId: item.deviceId,
             liters: item.liters,
             cubicMeters: item.liters / 1000,
+            ph: item.phCount > 0 ? item.ph / item.phCount : null,
             tds_ppm: item.tds_ppm / item.count,
             us_cm: item.us_cm / item.count,
             timestamp: new Date(parseInt(item.label), 0),
@@ -345,8 +474,8 @@ export default {
 
     const showEllipsis = computed(() => totalPages.value > 5 && visiblePages.value[visiblePages.value.length - 1] < totalPages.value);
 
-    // Reset to page 1 when report type changes
-    watch(reportType, () => {
+    // Reset to page 1 when report type or search criteria change
+    watch([reportType, searchDate, searchDeviceId], () => {
       currentPage.value = 1;
     });
 
@@ -360,6 +489,7 @@ export default {
     // Set report type
     const setReportType = (type) => {
       reportType.value = type;
+      searchDate.value = ''; // Reset search date when report type changes
     };
 
     // Lifecycle hooks
@@ -382,6 +512,9 @@ export default {
       totalPages,
       visiblePages,
       showEllipsis,
+      searchDate,
+      searchDeviceId,
+      availableYears,
     };
   },
 };
@@ -470,14 +603,53 @@ export default {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Search Controls */
+.search-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+  width: 100%;
+}
+
+.search-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  flex: 1;
+}
+
+.search-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--secondary-color);
+  margin-bottom: 0.5rem;
+}
+
+.search-input {
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--background-light);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  width: 100%;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+}
+
 /* Toggle Controls */
 .toggle-controls {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 1rem;
+  width: 100%;
 }
 
-/* Toggle Styles */
 .unit-toggle {
   display: flex;
   align-items: center;
@@ -486,7 +658,6 @@ export default {
   border-radius: 6px;
   border: 1px solid rgba(76, 175, 80, 0.2);
   margin-left: auto;
-  flex-wrap: wrap;
 }
 
 .unit-label {
@@ -494,6 +665,7 @@ export default {
   font-weight: 500;
   color: #2c3e50;
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .toggle-container {
@@ -515,6 +687,7 @@ export default {
   font-size: 0.75rem;
   position: relative;
   z-index: 1;
+  white-space: nowrap;
 }
 
 .toggle-button.active {
@@ -742,25 +915,33 @@ export default {
     margin-bottom: 16px;
   }
 
-  .toggle-controls {
+  .search-controls {
     flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+    gap: 1rem;
+  }
+
+  .search-group {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .toggle-controls {
+    flex-direction: row;
+    justify-content: flex-end;
   }
 
   .unit-toggle {
-    flex-wrap: wrap;
+    width: auto;
+    margin-left: auto;
   }
 
   .toggle-container {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .toggle-button {
-    width: 100%;
-    justify-content: center;
-    padding: 12px;
-    font-size: 1rem;
+    padding: 8px 12px;
+    font-size: 0.8rem;
   }
 
   /* Table to Card Layout */
@@ -884,19 +1065,25 @@ export default {
   }
 }
 
-@media (max-width: 400px) {
-  .pagination-button {
-    padding: 3px 6px;
-    font-size: 0.6rem;
+@media (max-width: 480px) {
+  .unit-toggle {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 
-  .page-number {
-    padding: 3px 6px;
-    font-size: 0.6rem;
+  .unit-label {
+    margin-right: 0;
+    text-align: center;
   }
 
-  .pagination-info {
-    font-size: 0.6rem;
+  .toggle-container {
+    width: 100%;
+  }
+
+  .toggle-button {
+    flex: 1;
+    text-align: center;
   }
 }
 </style>
